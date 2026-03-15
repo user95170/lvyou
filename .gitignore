@@ -1,0 +1,42 @@
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+
+# Python / backend
+**/__pycache__/
+*.pyc
+*.pyo
+backend/.pytest_cache/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+backend/app/pipelines/models/
+*.db
+
+# Virtualenvs
+.venv/
+venv/
+
+# Local tooling
+.vscode/
+.windsurf/
+
+# Data / backups
+data/
+backup_*/
+
+# OS / misc
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+
+# Large binaries
+*.zip
+*.rar
+*.7z
+*.msi
+*.exe
+*.pdf

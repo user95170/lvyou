@@ -1,0 +1,106 @@
+Title: API:Etiquette - MediaWiki
+
+URL Source: http://www.mediawiki.org/wiki/API:Etiquette
+
+Markdown Content:
+Languages:
+
+*   [Bahasa Indonesia](https://www.mediawiki.org/wiki/API:Etiquette/id "API:Etika (2% translated)")
+*   [Deutsch](https://www.mediawiki.org/wiki/API:Etiquette/de "API:Etikette (86% translated)")
+*   [Deutsch (Sie-Form)](https://www.mediawiki.org/wiki/API:Etiquette/de-formal "API:Etiquette/de-formal (12% translated)")
+*   English
+*   [Hausa](https://www.mediawiki.org/wiki/API:Etiquette/ha "API:Etiquette/ha (2% translated)")
+*   [Türkçe](https://www.mediawiki.org/wiki/API:Etiquette/tr "API:Etiquette (76% translated)")
+*   [español](https://www.mediawiki.org/wiki/API:Etiquette/es "API:Etiquette (69% translated)")
+*   [français](https://www.mediawiki.org/wiki/API:Etiquette/fr "API:Etiquette (93% translated)")
+*   [italiano](https://www.mediawiki.org/wiki/API:Etiquette/it "API:Galateo (31% translated)")
+*   [polski](https://www.mediawiki.org/wiki/API:Etiquette/pl "API:Etykieta (34% translated)")
+*   [português](https://www.mediawiki.org/wiki/API:Etiquette/pt "API: Etiqueta (38% translated)")
+*   [português do Brasil](https://www.mediawiki.org/wiki/API:Etiquette/pt-br "API:Etiqueta (17% translated)")
+*   [čeština](https://www.mediawiki.org/wiki/API:Etiquette/cs "API:Etiketa (100% translated)")
+*   [кыргызча](https://www.mediawiki.org/wiki/API:Etiquette/ky "API:Этикет (2% translated)")
+*   [русский](https://www.mediawiki.org/wiki/API:Etiquette/ru "API:Этикет (93% translated)")
+*   [українська](https://www.mediawiki.org/wiki/API:Etiquette/uk "API:Етикет (26% translated)")
+*   [کوردی](https://www.mediawiki.org/wiki/API:Etiquette/ckb "API:Etiquette/ckb (10% translated)")
+*   [ไทย](https://www.mediawiki.org/wiki/API:Etiquette/th "API:Etiquette (17% translated)")
+*   [中文](https://www.mediawiki.org/wiki/API:Etiquette/zh "API:礼仪 (64% translated)")
+*   [日本語](https://www.mediawiki.org/wiki/API:Etiquette/ja "API:エチケット (83% translated)")
+*   [한국어](https://www.mediawiki.org/wiki/API:Etiquette/ko "API:에티켓 (84% translated)")
+
+![Image 1](https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/API_-_The_Noun_Project.svg/40px-API_-_The_Noun_Project.svg.png)This page is part of the [MediaWiki Action API](https://www.mediawiki.org/wiki/Special:MyLanguage/API:Main_page "Special:MyLanguage/API:Main page") documentation.
+
+![Image 2](https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Walnut.svg/40px-Walnut.svg.png)**This page in a nutshell:**
+*   Set an informative User-Agent string with contact information, or you may be IP-blocked without notice. See the [User-Agent policy](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:User-Agent_policy "foundation:Special:MyLanguage/Policy:User-Agent policy") for more details.
+*   Make your requests in series rather than in parallel, by waiting for one request to finish before sending a new request.
+*   Perform grouped updates via one single `editEntity`, for all languages and for labels, descriptions, and aliases at once.
+*   On Wikimedia wikis, there may be faster ways to get bulk data. See [m:Research:Data](https://meta.wikimedia.org/wiki/Special:MyLanguage/Research:Data "m:Special:MyLanguage/Research:Data") and [wikitech:Portal:Data Services](https://wikitech.wikimedia.org/wiki/Portal:Data_Services "wikitech:Portal:Data Services") for more details.
+*   See also [the official guidelines about API usage](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Wikimedia_Foundation_API_Usage_Guidelines "foundation:Special:MyLanguage/Policy:Wikimedia Foundation API Usage Guidelines") on Wikimedia Foundation Governance wiki.
+
+This page contains the best practices that should be followed when using the API. See also [the official guidelines about API usage](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Wikimedia_Foundation_API_Usage_Guidelines "foundation:Special:MyLanguage/Policy:Wikimedia Foundation API Usage Guidelines") on Wikimedia Foundation Governance wiki.
+
+Behaviour
+---------
+
+### Request limit
+There is no hard speed limit on read requests, but be considerate and try not to take a site down. Most system administrators reserve the right to unceremoniously block you if you do endanger the stability of their site.
+
+Making your requests in series rather than in parallel, by waiting for one request to finish before sending a new request, should result in a safe request rate. It is also recommended that you ask for multiple items in one request by:
+
+*   Using the pipe character (`|`) whenever possible e.g. `titles=PageA|PageB|PageC`, instead of making a new request for each title.
+*   Using a [generator](https://www.mediawiki.org/wiki/Special:MyLanguage/API:Query#Generators "Special:MyLanguage/API:Query") instead of making a request for each result from another request.
+
+*   Use GZip compression when making API calls by setting `Accept-Encoding: gzip` to reduce bandwidth usage.
+
+Requests which make edits, modify state or otherwise are not read-only requests, _are_ subject to rate limiting. The exact rate limit being applied might depend on the type of action, your user rights and the configuration of the website you are making the request to. The limits that apply to you can be determined by accessing the action=query&meta=userinfo&uiprop=ratelimits API endpoint.
+
+When you hit the request rate limit you will receive a [API error response](https://www.mediawiki.org/wiki/Special:MyLanguage/API:Errors_and_warnings "Special:MyLanguage/API:Errors and warnings") with the error code `ratelimited`. When you encounter this error, you may retry that request, however you should increase the time between subsequent requests. A common strategy for this is [Exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff "w:Exponential backoff").
+
+### Parsing of revisions
+While it is possible to query for results from a specific revision number using the `revid` parameter, this is an expensive operation for the servers. To retrieve a specific revision use the `oldid` parameter. For example:
+
+### The maxlag parameter
+If your task is not interactive, i.e. a user is not waiting for the result, you should use the `maxlag` parameter. The value of the `maxlag` parameter should be an integer number of seconds. For example:
+
+This will prevent your task from running when the load on the servers is high. Higher values mean more aggressive behaviour, lower values are nicer.
+
+See [Manual:Maxlag parameter](https://www.mediawiki.org/wiki/Special:MyLanguage/Manual:Maxlag_parameter "Special:MyLanguage/Manual:Maxlag parameter") for more details.
+
+It is best practice to set a descriptive User Agent header. To do so, use `User-Agent: clientname/version (contact information e.g. username, email) framework/version...`. For example in PHP:
+
+ini_set('user_agent', 'MyCoolTool/1.1 (https://example.org/MyCoolTool/; MyCoolTool@example.org) UsedBaseLibrary/1.4');
+
+Do not simply copy the user-agent of a popular web browser. This ensures that if a problem does arise it is easy to track down where it originates.
+
+If you are calling the API from browser-based JavaScript, you may not be able to influence the `User-Agent` header, depending on the browser. To work around this, use the `Api-User-Agent` header.
+
+See [User-Agent policy](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:User-Agent_policy "foundation:Special:MyLanguage/Policy:User-Agent policy") for more details.
+
+### Data formats
+
+All new API users [should use JSON](https://www.mediawiki.org/wiki/Special:MyLanguage/API:Data_formats#Output "Special:MyLanguage/API:Data formats"). See [API:Data formats](https://www.mediawiki.org/wiki/Special:MyLanguage/API:Data_formats "Special:MyLanguage/API:Data formats") for more details.
+
+Performance
+-----------
+
+Downloading data in bulk is not always extremely efficient using the Action API. On Wikimedia wikis, there are faster ways to get data in bulk, see [m:Research:Data](https://meta.wikimedia.org/wiki/Research:Data "m:Research:Data") and [wikitech:Portal:Data Services](https://wikitech.wikimedia.org/wiki/Portal:Data_Services "wikitech:Portal:Data Services") for more details.
+
+Other notes
+-----------
+
+If your requests obtain data that can be cached for a while, you should take steps to cache it, so you don't request the same data over and over again. Some clients may be able to cache data themselves, but for others (particularly JavaScript clients), this is not possible.
+
+Whenever you're reading data from the web service API, you should try to use GET requests if possible, not POST, as the latter are not cacheable and, in [multi-datacenter](https://wikitech.wikimedia.org/wiki/Performance/Multi-DC_MediaWiki "wikitech:Performance/Multi-DC MediaWiki") configurations (including Wikimedia sites), may go to a farther data center.
+
+In exceptional cases where you really need to use POST for a read request, such as calling `action=parse` with a long string of wikitext, consider setting the `Promise-Non-Write-API-Action: true` header. This helps ensure that your POST request is processed by an application server in the closest data center, if appropriate. There is no need to set this header for GET requests, and neither should it be set when making [cross-wiki requests](https://www.mediawiki.org/wiki/Special:MyLanguage/Extension:CentralAuth/API "Special:MyLanguage/Extension:CentralAuth/API") within a wiki family using CentralAuth; see [T91820](https://phabricator.wikimedia.org/T91820 "phabricator:T91820").
+
+See also
+--------
+
+*   [Official guidelines about API usage](https://foundation.wikimedia.org/wiki/Policy:API_usage_guidelines "foundation:Policy:API usage guidelines") on Wikimedia Foundation Governance wiki
+*   [Wikimedia Robot policy](https://wikitech.wikimedia.org/wiki/Robot_policy "wikitech:Robot policy") on Wikitech
+*   [API:Main page](https://www.mediawiki.org/wiki/Special:MyLanguage/API:Main_page "Special:MyLanguage/API:Main page") - The quick start guide.
+*   [API:Ratelimit](https://www.mediawiki.org/wiki/Special:MyLanguage/API:Ratelimit "Special:MyLanguage/API:Ratelimit")&[API:Ratelimit/Wikimedia sites](https://www.mediawiki.org/wiki/Special:MyLanguage/API:Ratelimit/Wikimedia_sites "Special:MyLanguage/API:Ratelimit/Wikimedia sites")
+
+*   Maintained by [MediaWiki Interfaces Team](https://www.mediawiki.org/wiki/Special:MyLanguage/MediaWiki_Interfaces_Team "Special:MyLanguage/MediaWiki Interfaces Team").
+*   Live chat ([IRC](https://www.mediawiki.org/wiki/Special:MyLanguage/MediaWiki_on_IRC "Special:MyLanguage/MediaWiki on IRC")): [#mediawiki-core](ircs://irc.libera.chat:6697/mediawiki-core)[connect](https://web.libera.chat/?channel=#mediawiki-core)
+*   Issue tracker: [Phabricator MediaWiki-Action-API](https://phabricator.wikimedia.org/tag/mediawiki-action-api/) ([Report an issue](https://phabricator.wikimedia.org/maniphest/task/edit/form/1/?projects=mediawiki-action-api))
