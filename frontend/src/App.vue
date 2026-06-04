@@ -6,6 +6,7 @@
         <router-link to="/" data-testid="nav-home">推荐</router-link>
         <router-link to="/browse" data-testid="nav-browse">目的地浏览</router-link>
         <router-link to="/route" data-testid="nav-route">行程规划</router-link>
+        <router-link to="/trips" data-testid="nav-trips">我的行程</router-link>
         <router-link to="/profile" data-testid="nav-profile">我的偏好</router-link>
         <router-link to="/login" data-testid="nav-login">登录</router-link>
         <router-link to="/register" data-testid="nav-register">注册</router-link>

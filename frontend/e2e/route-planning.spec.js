@@ -1,7 +1,8 @@
 const { test, expect } = require('@playwright/test');
-const { expectToast, registerAndLogin } = require('./helpers');
+const { expectToast, installMockAmap, registerAndLogin } = require('./helpers');
 
 test('trip items added on home are carried into route planning and can be planned', async ({ page }) => {
+  await installMockAmap(page);
   await registerAndLogin(page, 'route_plan');
 
   await page.getByTestId('home-add-trip-btn').nth(0).click();
@@ -18,4 +19,5 @@ test('trip items added on home are carried into route planning and can be planne
 
   await page.getByTestId('route-plan-btn').click();
   await expect(page.getByTestId('route-result')).toBeVisible();
+  await expect(page.getByTestId('route-map-canvas')).toBeVisible();
 });

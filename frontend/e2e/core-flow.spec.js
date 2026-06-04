@@ -2,12 +2,14 @@ const { test, expect } = require('@playwright/test');
 const {
   AGENT_PROMPT,
   expectToast,
+  installMockAmap,
   registerAndLogin,
   waitForBrowseCards,
   waitForHomeRecommendations,
 } = require('./helpers');
 
 test('core user flow covers register, browse, rate, recommend, route and agent', async ({ page }) => {
+  await installMockAmap(page);
   await registerAndLogin(page, 'core_flow');
 
   await page.getByTestId('nav-browse').click();
@@ -33,6 +35,7 @@ test('core user flow covers register, browse, rate, recommend, route and agent',
   await expect(page).toHaveURL(/\/route$/);
   await page.getByTestId('route-plan-btn').click();
   await expect(page.getByTestId('route-result')).toBeVisible();
+  await expect(page.getByTestId('route-map-section')).toBeVisible();
 
   await page.getByTestId('nav-profile').click();
   await expect(page).toHaveURL(/\/profile$/);

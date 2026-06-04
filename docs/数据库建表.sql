@@ -2,8 +2,11 @@
 -- 说明：
 -- 1. 请在创建好目标数据库并切换至该库后执行本脚本。
 -- 2. 可根据实际 MySQL 版本和部署需求，适当调整字符集、存储引擎等设置。
--- 3. 当前应用代码仅使用 user/user_profile/user_behavior_log/scenic_spot/hotel/food_place/rating/content_standard；
---    其余表（souvenir/trip/*/social_raw/ecommerce_raw）为规划保留，当前代码未依赖。
+-- 3. 当前应用代码已使用 user/user_profile/user_behavior_log/scenic_spot/hotel/food_place/rating/content_standard/trip/trip_day/trip_item；
+--    其中 trip 系列表已支持单日路线保存与多日 Agent 草案落库；
+--    souvenir/social_raw/ecommerce_raw 仍为规划保留。
+-- 4. 开发环境运行时，Flask 应用会通过 SQLAlchemy 的 db.create_all() 非破坏性补齐缺失表；
+--    本脚本更适合全量初始化或重建数据库时使用。
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -196,6 +199,9 @@ CREATE TABLE `trip_item` (
   `item_index` SMALLINT UNSIGNED NOT NULL,
   `item_type` VARCHAR(50) NOT NULL,
   `ref_id` INT UNSIGNED DEFAULT NULL,
+  `title_snapshot` VARCHAR(255) NOT NULL,
+  `city_snapshot` VARCHAR(100) DEFAULT NULL,
+  `address_snapshot` VARCHAR(255) DEFAULT NULL,
   `start_time` TIME DEFAULT NULL,
   `end_time` TIME DEFAULT NULL,
   `transport_mode` VARCHAR(20) DEFAULT NULL,

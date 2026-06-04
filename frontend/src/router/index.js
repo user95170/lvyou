@@ -5,6 +5,9 @@ import RegisterView from '../views/RegisterView.vue';
 import BrowseView from '../views/BrowseView.vue';
 import ProfileView from '../views/ProfileView.vue';
 import RouteView from '../views/RouteView.vue';
+import TripsView from '../views/TripsView.vue';
+import TripCreateView from '../views/TripCreateView.vue';
+import TripDetailView from '../views/TripDetailView.vue';
 
 const routes = [
   {
@@ -36,6 +39,21 @@ const routes = [
     path: '/route',
     name: 'route',
     component: RouteView,
+  },
+  {
+    path: '/trips',
+    name: 'trips',
+    component: TripsView,
+  },
+  {
+    path: '/trips/new',
+    name: 'trip-create',
+    component: TripCreateView,
+  },
+  {
+    path: '/trips/:id',
+    name: 'trip-detail',
+    component: TripDetailView,
   },
 ];
 

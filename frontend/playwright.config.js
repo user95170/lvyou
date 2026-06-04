@@ -64,7 +64,9 @@ module.exports = defineConfig({
       env: {
         ...process.env,
         VITE_API_PROXY_TARGET: 'http://127.0.0.1:5100',
+        VITE_AMAP_JS_KEY: 'playwright-amap-key',
         VITE_PORT: '4173',
+        VITE_CJS_IGNORE_WARNING: '1',
       },
     },
   ],

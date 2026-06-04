@@ -8,7 +8,12 @@ echo.
 cd /d "%~dp0backend"
 
 :: 设置API Key
-set AMAP_API_KEY=0e55c251c510be470acd9bace0efe62f
+if "%AMAP_API_KEY%"=="" (
+    echo AMAP_API_KEY is not set. Please set it before running this script.
+    echo Example: set AMAP_API_KEY=your_key_here
+    pause
+    exit /b 1
+)
 
 echo [1/3] 开始采集景点、酒店、美食数据...
 echo.

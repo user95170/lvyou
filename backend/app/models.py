@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
 from sqlalchemy import BigInteger, Integer
 
@@ -213,6 +213,157 @@ class FoodPlace(db.Model):
             "source": self.source,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Trip(db.Model):
+    __tablename__ = "trip"
+
+    id = db.Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    start_date = db.Column(db.Date)
+    end_date = db.Column(db.Date)
+    days = db.Column(db.Integer)
+    origin_city = db.Column(db.String(100))
+    budget_level = db.Column(db.Integer)
+    travel_style = db.Column(db.String(50))
+    created_by = db.Column(db.String(20))
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=_utcnow,
+        onupdate=_utcnow,
+    )
+
+    trip_days = db.relationship(
+        "TripDay",
+        back_populates="trip",
+        cascade="all, delete-orphan",
+        order_by="TripDay.day_index",
+    )
+
+    def item_count(self) -> int:
+        return sum(len(day.items) for day in self.trip_days)
+
+    def to_summary_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "start_date": self.start_date.isoformat() if self.start_date else None,
+            "end_date": self.end_date.isoformat() if self.end_date else None,
+            "days": self.days,
+            "origin_city": self.origin_city,
+            "budget_level": self.budget_level,
+            "travel_style": self.travel_style,
+            "created_by": self.created_by,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "item_count": self.item_count(),
+        }
+
+    def to_detail_dict(self, coordinate_lookup: dict | None = None) -> dict:
+        data = self.to_summary_dict()
+        data.update(
+            {
+                "user_id": self.user_id,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "trip_days": [
+                    day.to_dict(coordinate_lookup=coordinate_lookup)
+                    for day in self.trip_days
+                ],
+            }
+        )
+        return data
+
+
+class TripDay(db.Model):
+    __tablename__ = "trip_day"
+
+    id = db.Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True)
+    trip_id = db.Column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        db.ForeignKey("trip.id"),
+        nullable=False,
+        index=True,
+    )
+    day_index = db.Column(db.Integer, nullable=False)
+    date = db.Column(db.Date)
+    note = db.Column(db.String(255))
+
+    trip = db.relationship("Trip", back_populates="trip_days")
+    items = db.relationship(
+        "TripItem",
+        back_populates="trip_day",
+        cascade="all, delete-orphan",
+        order_by="TripItem.item_index",
+    )
+
+    def to_dict(self, coordinate_lookup: dict | None = None) -> dict:
+        return {
+            "id": self.id,
+            "trip_id": self.trip_id,
+            "day_index": self.day_index,
+            "date": self.date.isoformat() if self.date else None,
+            "note": self.note,
+            "items": [
+                item.to_dict(coordinate_lookup=coordinate_lookup)
+                for item in self.items
+            ],
+        }
+
+
+class TripItem(db.Model):
+    __tablename__ = "trip_item"
+
+    id = db.Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True)
+    trip_day_id = db.Column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        db.ForeignKey("trip_day.id"),
+        nullable=False,
+        index=True,
+    )
+    item_index = db.Column(db.Integer, nullable=False)
+    item_type = db.Column(db.String(50), nullable=False)
+    ref_id = db.Column(db.Integer)
+    title_snapshot = db.Column(db.String(255), nullable=False)
+    city_snapshot = db.Column(db.String(100))
+    address_snapshot = db.Column(db.String(255))
+    start_time = db.Column(db.Time)
+    end_time = db.Column(db.Time)
+    transport_mode = db.Column(db.String(20))
+    note = db.Column(db.String(255))
+
+    trip_day = db.relationship("TripDay", back_populates="items")
+
+    @staticmethod
+    def _serialize_time(value: time | None) -> str | None:
+        if value is None:
+            return None
+        return value.strftime("%H:%M")
+
+    def to_dict(self, coordinate_lookup: dict | None = None) -> dict:
+        longitude = None
+        latitude = None
+        if coordinate_lookup and self.ref_id is not None:
+            longitude, latitude = coordinate_lookup.get(
+                (self.item_type, self.ref_id),
+                (None, None),
+            )
+        return {
+            "id": self.id,
+            "trip_day_id": self.trip_day_id,
+            "item_index": self.item_index,
+            "item_type": self.item_type,
+            "ref_id": self.ref_id,
+            "title_snapshot": self.title_snapshot,
+            "city_snapshot": self.city_snapshot,
+            "address_snapshot": self.address_snapshot,
+            "start_time": self._serialize_time(self.start_time),
+            "end_time": self._serialize_time(self.end_time),
+            "transport_mode": self.transport_mode,
+            "note": self.note,
+            "longitude": longitude,
+            "latitude": latitude,
         }
 
 

@@ -1,25 +1,26 @@
 <template>
   <div class="page">
-    <h2>????</h2>
-
     <section class="block">
-      <h3>?????</h3>
+      <h2>行程规划</h2>
+      <h3>选择景点</h3>
+
       <div
         v-if="pendingSpots.length > 0"
         class="pending-hint"
         data-testid="route-pending-hint"
       >
-        <p>??????? {{ pendingSpots.length }} ??????????</p>
-        <button type="button" class="btn-clear" @click="clearPending">???????</button>
+        <p>你有 {{ pendingSpots.length }} 个待规划景点，已经自动加入当前候选列表。</p>
+        <button type="button" class="btn-clear" @click="clearPending">清空待规划</button>
       </div>
+
       <div class="filters">
         <label>
-          ??
+          城市
           <input
             v-model="city"
             data-testid="route-city-input"
             type="text"
-            placeholder="??????????"
+            placeholder="输入城市后加载景点"
           />
         </label>
         <button
@@ -28,12 +29,14 @@
           @click="loadScenic"
           :disabled="loadingScenic"
         >
-          {{ loadingScenic ? '???...' : '????' }}
+          {{ loadingScenic ? '加载中...' : '加载景点' }}
         </button>
       </div>
-      <p class="hint">???????????????</p>
+
+      <p class="hint">至少选择 2 个景点后才能生成路线。</p>
 
       <div v-if="scenicError" class="error">{{ scenicError }}</div>
+
       <ul v-else class="card-list">
         <li v-for="spot in scenicList" :key="spot.id" class="card">
           <label class="card-inner">
@@ -45,8 +48,10 @@
             />
             <div>
               <div class="title">{{ spot.name }}</div>
-              <div class="sub">{{ spot.city }} ? {{ spot.type || '??' }}</div>
-              <div class="desc">{{ spot.description?.slice(0, 60) || spot.tags || '???????????' }}</div>
+              <div class="sub">{{ spot.city }} · {{ spot.type || '未分类' }}</div>
+              <div class="desc">
+                {{ spot.description?.slice(0, 60) || spot.tags || '暂无更多介绍' }}
+              </div>
             </div>
           </label>
         </li>
@@ -54,55 +59,127 @@
     </section>
 
     <section class="block">
-      <h3>????</h3>
+      <h3>生成路线</h3>
+
       <div class="filters">
         <label>
-          ????
+          优化模式
           <select v-model="optimizeMode">
-            <option value="greedy">??</option>
+            <option value="greedy">greedy</option>
             <option value="2opt">2-opt</option>
-            <option value="balanced">??</option>
+            <option value="balanced">balanced</option>
           </select>
         </label>
         <button type="button" data-testid="route-plan-btn" @click="doPlan" :disabled="planning">
-          {{ planning ? '???...' : '????' }}
+          {{ planning ? '规划中...' : '开始规划' }}
         </button>
       </div>
-      <p class="hint">???? 2-opt ?????????</p>
+
+      <p class="hint">`2-opt` 通常能得到更短的路线，`balanced` 会兼顾距离和热度。</p>
 
       <div v-if="planError" class="error">{{ planError }}</div>
+
       <div v-if="route.length" class="route" data-testid="route-result">
-        <p class="hint">????????????{{ algorithmUsed }}??</p>
+        <p class="hint">当前结果使用算法：{{ algorithmUsed || optimizeMode }}</p>
         <ol>
-          <li v-for="(spot, idx) in route" :key="spot.id">
-            <strong>? {{ idx + 1 }} ??</strong>{{ spot.name }}?{{ spot.city }}?
+          <li v-for="(spot, idx) in route" :key="`${spot.id}-${idx}`">
+            <strong>第 {{ idx + 1 }} 站：</strong>{{ spot.name }}（{{ spot.city || '未知城市' }}）
           </li>
         </ol>
-        <p v-if="totalDistance != null" class="meta">??????{{ totalDistance }} km</p>
+        <p v-if="totalDistance != null" class="meta">估算总路程：{{ totalDistance }} km</p>
+      </div>
+    </section>
+
+    <section
+      v-if="route.length"
+      class="block"
+      data-testid="route-map-section"
+    >
+      <div class="section-header">
+        <div>
+          <h3>路线地图</h3>
+          <p class="hint">按当前规划顺序展示可上图点位与连线预览。</p>
+        </div>
+        <span class="map-summary">可上图 {{ routeMapPoints.length }}/{{ route.length }}</span>
+      </div>
+
+      <AmapMapPanel
+        :points="routeMapPoints"
+        test-id-prefix="route-map"
+        empty-message="当前路线结果暂无可上图点位"
+        config-error-message="未配置高德地图 Key，暂时无法显示路线地图。"
+      />
+    </section>
+
+    <section
+      v-if="route.length"
+      class="block save-block"
+      data-testid="route-save-section"
+    >
+      <h3>保存为行程</h3>
+
+      <div v-if="currentUser?.id">
+        <div class="field-grid">
+          <label>
+            行程标题
+            <input
+              v-model="saveTitle"
+              data-testid="route-save-title-input"
+              type="text"
+              placeholder="请输入行程标题"
+            />
+          </label>
+
+          <label>
+            出发日期
+            <input
+              v-model="saveStartDate"
+              data-testid="route-save-date-input"
+              type="date"
+            />
+          </label>
+        </div>
+
+        <p class="hint">保存后会跳转到行程详情页，可继续调整顺序、时间和备注。</p>
+
+        <button
+          type="button"
+          data-testid="route-save-btn"
+          @click="saveRouteAsTrip"
+          :disabled="savingTrip"
+        >
+          {{ savingTrip ? '保存中...' : '保存行程' }}
+        </button>
+      </div>
+
+      <div v-else class="save-login-hint" data-testid="route-login-hint">
+        <p>登录后可将本次路线保存到“我的行程”。</p>
+        <router-link to="/login" class="link-button">前往登录</router-link>
       </div>
     </section>
 
     <section class="block">
-      <h3>?????AMap?</h3>
+      <h3>路线方案（AMap）</h3>
+
       <div class="filters">
         <label>
-          ????
+          起点经度
           <input v-model="optOriginLng" type="number" step="0.000001" placeholder="116.4343" />
         </label>
         <label>
-          ????
+          起点纬度
           <input v-model="optOriginLat" type="number" step="0.000001" placeholder="39.9091" />
         </label>
         <label>
-          ????
+          终点经度
           <input v-model="optDestLng" type="number" step="0.000001" placeholder="116.4344" />
         </label>
         <label>
-          ????
+          终点纬度
           <input v-model="optDestLat" type="number" step="0.000001" placeholder="39.9082" />
         </label>
         <label>
-          ??
+          模式
           <select v-model="optMode">
             <option value="drive">drive</option>
             <option value="transit">transit</option>
@@ -110,7 +187,7 @@
           </select>
         </label>
         <label>
-          API ??
+          API 版本
           <select v-model="optApiVersion">
             <option value="v5">v5</option>
             <option value="v3">v3</option>
@@ -120,25 +197,25 @@
 
       <div class="filters" v-if="optMode === 'drive'">
         <label>
-          ????
-          <input v-model="optDriveStrategy" type="text" placeholder="?? 32(v5) / 10(v3)" />
+          驾车策略
+          <input v-model="optDriveStrategy" type="text" placeholder="例如 32(v5) / 10(v3)" />
         </label>
-        <div>
-          <div style="font-size: 14px">?????? 16 ??</div>
+
+        <div class="waypoint-editor">
+          <div class="sub-title">途经点（最多 16 个）</div>
           <div
-            v-for="(wp, i) in optWaypoints"
-            :key="i"
-            style="display:flex;gap:6px;margin:4px 0;align-items:center;"
+            v-for="(waypoint, index) in optWaypoints"
+            :key="index"
+            class="waypoint-row"
           >
             <input
-              v-model="optWaypoints[i]"
+              v-model="optWaypoints[index]"
               type="text"
-              placeholder="lng,lat ?? 116.401,39.901"
-              style="flex:1"
+              placeholder="lng,lat 例如 116.401,39.901"
             />
-            <button type="button" @click="removeWaypoint(i)" style="background:#ef4444">??</button>
+            <button type="button" class="danger" @click="removeWaypoint(index)">删除</button>
           </div>
-          <button type="button" @click="addWaypoint">+ ?????</button>
+          <button type="button" @click="addWaypoint">+ 添加途经点</button>
         </div>
       </div>
 
@@ -160,12 +237,12 @@
           <input v-model="optAd2" type="text" placeholder="110108" />
         </label>
         <label>
-          ????
+          公交策略
           <input v-model="optTransitStrategy" type="text" placeholder="0..8" />
         </label>
         <label>
           AlternativeRoute
-          <input v-model.number="optAlternativeRoute" type="number" min="1" max="10" placeholder="1..10" />
+          <input v-model.number="optAlternativeRoute" type="number" min="1" max="10" />
         </label>
         <label>
           multiexport
@@ -185,17 +262,21 @@
 
       <div class="filters">
         <button type="button" @click="doRouteOptions" :disabled="optLoading">
-          {{ optLoading ? '???...' : '??????' }}
+          {{ optLoading ? '计算中...' : '获取方案' }}
         </button>
-        <button type="button" @click="resetRouteOptions" style="background:#6b7280">??</button>
+        <button type="button" class="secondary" @click="resetRouteOptions">重置</button>
       </div>
+
       <div v-if="optError" class="error">{{ optError }}</div>
+
       <ul v-if="optResult.length" class="card-list">
-        <li v-for="(o, idx) in optResult" :key="idx" class="card">
+        <li v-for="(option, index) in optResult" :key="index" class="card">
           <div class="card-inner">
             <div>
-              <div class="title">{{ o.label || ('??' + (idx + 1)) }}</div>
-              <div class="sub">?? {{ o.duration_min ?? '-' }} ?? ? ?? {{ o.distance_km ?? '-' }} km</div>
+              <div class="title">{{ option.label || `方案 ${index + 1}` }}</div>
+              <div class="sub">
+                耗时 {{ option.duration_min ?? '-' }} 分钟 · 距离 {{ option.distance_km ?? '-' }} km
+              </div>
             </div>
           </div>
         </li>
@@ -203,31 +284,44 @@
     </section>
 
     <section class="block">
-      <h3>????????</h3>
+      <h3>路线运行指标</h3>
+
       <div class="filters">
         <button type="button" @click="loadMetrics" :disabled="metricsLoading">
-          {{ metricsLoading ? '???...' : '????' }}
+          {{ metricsLoading ? '加载中...' : '刷新指标' }}
         </button>
       </div>
+
       <div v-if="metricsError" class="error">{{ metricsError }}</div>
-      <div v-if="summary" style="margin-top: 8px">
+
+      <div v-if="summary" class="metrics-summary">
         <p class="hint">
-          ????? {{ summary.amap_success_total || 0 }} ? ?? {{ summary.amap_fail_total || 0 }} ? ??? {{ summary.amap_success_rate ?? 0 }}
+          AMap 成功 {{ summary.amap_success_total || 0 }} 次，失败 {{ summary.amap_fail_total || 0 }} 次，成功率 {{ summary.amap_success_rate ?? 0 }}
         </p>
-        <p class="hint">???{{ summary.source_breakdown }}</p>
-        <p class="hint">???Distance {{ summary.fallback_amap_distance || 0 }} ? Haversine {{ summary.fallback_haversine || 0 }}</p>
-        <p class="hint">???hit {{ summary.amap_cache_hit || 0 }} / miss {{ summary.amap_cache_miss || 0 }} ? ???? {{ summary.amap_rate_limited_skips || 0 }}</p>
-        <p class="hint">citycode ???{{ summary.infer_citycode_used || 0 }}</p>
-        <div v-if="summary.top_fail_infocode && summary.top_fail_infocode.length">
-          <div class="title" style="margin-top: 8px">Top ?? infocode</div>
+        <p class="hint">来源分布：{{ summary.source_breakdown }}</p>
+        <p class="hint">
+          回退统计：Distance API {{ summary.fallback_amap_distance || 0 }} 次，Haversine {{ summary.fallback_haversine || 0 }} 次
+        </p>
+        <p class="hint">
+          缓存命中 {{ summary.amap_cache_hit || 0 }} / 未命中 {{ summary.amap_cache_miss || 0 }}，限流跳过 {{ summary.amap_rate_limited_skips || 0 }}
+        </p>
+        <p class="hint">citycode 推断使用 {{ summary.infer_citycode_used || 0 }} 次</p>
+
+        <div v-if="summary.top_fail_infocode?.length">
+          <div class="title extra-title">Top 失败 infocode</div>
           <ul>
-            <li v-for="(it, i) in summary.top_fail_infocode" :key="i">{{ it[0] }}?{{ it[1] }}</li>
+            <li v-for="(item, index) in summary.top_fail_infocode" :key="index">
+              {{ item[0] }}：{{ item[1] }}
+            </li>
           </ul>
         </div>
-        <div v-if="summary.top_fail_modes && summary.top_fail_modes.length">
-          <div class="title" style="margin-top: 8px">Top ????</div>
+
+        <div v-if="summary.top_fail_modes?.length">
+          <div class="title extra-title">Top 失败模式</div>
           <ul>
-            <li v-for="(it, i) in summary.top_fail_modes" :key="i">{{ it[0] }}?{{ it[1] }}</li>
+            <li v-for="(item, index) in summary.top_fail_modes" :key="index">
+              {{ item[0] }}：{{ item[1] }}
+            </li>
           </ul>
         </div>
       </div>
@@ -236,11 +330,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import AmapMapPanel from '../components/AmapMapPanel.vue';
 import { getScenicSpots } from '../api/resources';
-import { planRoute, routeOptions, routeMetrics } from '../api/route';
-import { getPendingSpots, clearPendingSpots } from '../utils/trip';
+import { planRoute, routeMetrics, routeOptions } from '../api/route';
+import { createTrip } from '../api/trips';
 import { toast } from '../utils/toast';
+import { getPendingSpots, clearPendingSpots } from '../utils/trip';
+import { getCurrentUser } from '../utils/user';
+
+const router = useRouter();
+const currentUser = getCurrentUser();
 
 const city = ref('');
 const scenicList = ref([]);
@@ -258,7 +359,10 @@ const pendingSpots = ref([]);
 const optimizeMode = ref('2opt');
 const algorithmUsed = ref('');
 
-// Route Options (AMap)
+const saveTitle = ref('');
+const saveStartDate = ref('');
+const savingTrip = ref(false);
+
 const optOriginLng = ref('');
 const optOriginLat = ref('');
 const optDestLng = ref('');
@@ -266,9 +370,8 @@ const optDestLat = ref('');
 const optMode = ref('drive');
 const optApiVersion = ref('v5');
 const optDriveStrategy = ref('');
-const optWaypoints = ref([]); // array of "lng,lat" strings
+const optWaypoints = ref([]);
 
-// transit extras
 const optCity1 = ref('');
 const optCity2 = ref('');
 const optAd1 = ref('');
@@ -282,16 +385,68 @@ const optLoading = ref(false);
 const optError = ref('');
 const optResult = ref([]);
 
+const metricsLoading = ref(false);
+const metricsError = ref('');
+const summary = ref(null);
+
+function normalizeCoordinate(value) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+const routeMapPoints = computed(() =>
+  route.value
+    .map((spot, index) => {
+      const longitude = normalizeCoordinate(spot?.longitude);
+      const latitude = normalizeCoordinate(spot?.latitude);
+      if (longitude == null || latitude == null) {
+        return null;
+      }
+      return {
+        id: spot?.id ?? `route-point-${index + 1}`,
+        order: index + 1,
+        title: spot?.name || `第 ${index + 1} 站`,
+        longitude,
+        latitude,
+      };
+    })
+    .filter(Boolean)
+);
+
+function mergeUniqueSpots(...groups) {
+  const merged = [];
+  const seen = new Set();
+
+  groups.flat().forEach((spot) => {
+    if (!spot || seen.has(spot.id)) {
+      return;
+    }
+    seen.add(spot.id);
+    merged.push(spot);
+  });
+
+  return merged;
+}
+
+function refreshDefaultSaveTitle(plannedRoute = route.value) {
+  const fallbackCity = city.value.trim() || plannedRoute?.[0]?.city || '';
+  saveTitle.value = fallbackCity ? `${fallbackCity}一日游路线` : '一日游路线';
+}
+
+function getTripOriginCity(plannedRoute = route.value) {
+  return city.value.trim() || plannedRoute?.[0]?.city || '';
+}
+
 function addWaypoint() {
   if (optWaypoints.value.length >= 16) {
-    toast.error('????? 16 ?');
+    toast.error('途经点最多 16 个');
     return;
   }
   optWaypoints.value.push('');
 }
 
-function removeWaypoint(i) {
-  optWaypoints.value.splice(i, 1);
+function removeWaypoint(index) {
+  optWaypoints.value.splice(index, 1);
 }
 
 function resetRouteOptions() {
@@ -318,11 +473,12 @@ function resetRouteOptions() {
 async function doRouteOptions() {
   optError.value = '';
   optResult.value = [];
-  const nums = [optOriginLng.value, optOriginLat.value, optDestLng.value, optDestLat.value].map((v) =>
-    parseFloat(String(v))
+
+  const nums = [optOriginLng.value, optOriginLat.value, optDestLng.value, optDestLat.value].map((value) =>
+    parseFloat(String(value))
   );
-  if (nums.some((v) => Number.isNaN(v))) {
-    optError.value = '????????????';
+  if (nums.some((value) => Number.isNaN(value))) {
+    optError.value = '请输入完整且合法的起终点坐标';
     return;
   }
 
@@ -334,8 +490,12 @@ async function doRouteOptions() {
   };
 
   if (optMode.value === 'drive') {
-    if (optDriveStrategy.value) payload.drive_strategy = String(optDriveStrategy.value);
-    if (optWaypoints.value.length) payload.waypoints = optWaypoints.value.slice();
+    if (optDriveStrategy.value) {
+      payload.drive_strategy = String(optDriveStrategy.value);
+    }
+    if (optWaypoints.value.length) {
+      payload.waypoints = optWaypoints.value.slice();
+    }
   } else if (optMode.value === 'transit') {
     if (optCity1.value) payload.city1 = String(optCity1.value);
     if (optCity2.value) payload.city2 = String(optCity2.value);
@@ -352,20 +512,16 @@ async function doRouteOptions() {
     const resp = await routeOptions(payload);
     optResult.value = resp.data.options || [];
     if (!optResult.value.length) {
-      toast.error('???????');
+      toast.error('未返回可用路线方案');
     }
   } catch (e) {
-    const msg = e.response?.data?.error || '????????';
+    const msg = e.response?.data?.error || '获取路线方案失败';
     optError.value = msg;
     toast.error(msg);
   } finally {
     optLoading.value = false;
   }
 }
-
-const metricsLoading = ref(false);
-const metricsError = ref('');
-const summary = ref(null);
 
 async function loadMetrics() {
   metricsError.value = '';
@@ -375,7 +531,7 @@ async function loadMetrics() {
     const resp = await routeMetrics();
     summary.value = resp.data?.summary || null;
   } catch (e) {
-    metricsError.value = e.response?.data?.error || '??????';
+    metricsError.value = e.response?.data?.error || '加载指标失败';
   } finally {
     metricsLoading.value = false;
   }
@@ -385,14 +541,17 @@ async function loadScenic() {
   loadingScenic.value = true;
   scenicError.value = '';
   scenicList.value = [];
-  selectedIds.value = [];
+  selectedIds.value = pendingSpots.value.map((spot) => spot.id);
+
   try {
     const params = { page: 1, page_size: 30 };
-    if (city.value) params.city = city.value;
+    if (city.value) {
+      params.city = city.value;
+    }
     const resp = await getScenicSpots(params);
-    scenicList.value = resp.data.items || [];
+    scenicList.value = mergeUniqueSpots(pendingSpots.value, resp.data.items || []);
   } catch (e) {
-    const errorMsg = e.response?.data?.error || '????????';
+    const errorMsg = e.response?.data?.error || '加载景点失败';
     scenicError.value = errorMsg;
     toast.error(errorMsg);
   } finally {
@@ -407,7 +566,7 @@ async function doPlan() {
   algorithmUsed.value = '';
 
   if (selectedIds.value.length < 2) {
-    planError.value = '???????????????';
+    planError.value = '请至少勾选两个景点再规划路线';
     return;
   }
 
@@ -421,8 +580,9 @@ async function doPlan() {
     route.value = resp.data.route || [];
     totalDistance.value = resp.data.meta?.total_distance_km ?? null;
     algorithmUsed.value = resp.data.meta?.algorithm || optimizeMode.value;
+    refreshDefaultSaveTitle(route.value);
   } catch (e) {
-    const errorMsg = e.response?.data?.error || '??????';
+    const errorMsg = e.response?.data?.error || '路线规划失败';
     planError.value = errorMsg;
     toast.error(errorMsg);
   } finally {
@@ -430,24 +590,97 @@ async function doPlan() {
   }
 }
 
+async function saveRouteAsTrip() {
+  if (!currentUser?.id) {
+    return;
+  }
+
+  if (!route.value.length) {
+    toast.error('请先生成路线');
+    return;
+  }
+
+  const originCity = getTripOriginCity(route.value);
+  if (!originCity) {
+    toast.error('无法识别城市，请先输入城市后再保存');
+    return;
+  }
+
+  const title = (saveTitle.value || '').trim() || `${originCity}一日游路线`;
+  const startDate = saveStartDate.value || null;
+
+  const payload = {
+    user_id: currentUser.id,
+    title,
+    start_date: startDate,
+    origin_city: originCity,
+    created_by: 'route_planner',
+    trip_days: [
+      {
+        day_index: 1,
+        date: startDate,
+        note: null,
+        items: route.value.map((spot, index) => ({
+          item_index: index + 1,
+          item_type: 'scenic_spot',
+          ref_id: spot.id ?? null,
+          title_snapshot: spot.name || `景点${index + 1}`,
+          city_snapshot: spot.city || originCity,
+          address_snapshot: spot.address || null,
+          start_time: null,
+          end_time: null,
+          transport_mode: null,
+          note: null,
+        })),
+      },
+    ],
+  };
+
+  savingTrip.value = true;
+  try {
+    const resp = await createTrip(payload);
+    const tripId = resp.data?.trip?.id;
+    toast.success('行程已保存');
+    if (tripId) {
+      router.push(`/trips/${tripId}`);
+    } else {
+      router.push('/trips');
+    }
+  } catch (e) {
+    const msg = e.response?.data?.error || '保存行程失败';
+    toast.error(msg);
+  } finally {
+    savingTrip.value = false;
+  }
+}
+
 function loadPendingSpots() {
   pendingSpots.value = getPendingSpots();
   if (pendingSpots.value.length > 0) {
-    scenicList.value = [...pendingSpots.value, ...scenicList.value];
-    selectedIds.value = pendingSpots.value.map((s) => s.id);
+    scenicList.value = mergeUniqueSpots(pendingSpots.value, scenicList.value);
+    selectedIds.value = Array.from(new Set(pendingSpots.value.map((spot) => spot.id)));
+    if (!city.value && pendingSpots.value[0]?.city) {
+      city.value = pendingSpots.value[0].city;
+    }
   }
 }
 
 function clearPending() {
-  if (!confirm('????????????')) {
+  if (!confirm('确定要清空待规划景点吗？')) {
     return;
   }
+
+  const pendingIds = new Set(pendingSpots.value.map((spot) => spot.id));
   clearPendingSpots();
+  scenicList.value = scenicList.value.filter((spot) => !pendingIds.has(spot.id));
+  selectedIds.value = selectedIds.value.filter((id) => !pendingIds.has(id));
   pendingSpots.value = [];
+
   if (city.value) {
     loadScenic();
   }
-  toast.success('????????');
+
+  toast.success('待规划景点已清空');
 }
 
 onMounted(() => {
@@ -469,19 +702,43 @@ onMounted(() => {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
-.filters {
+.filters,
+.field-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: flex-end;
 }
 
-label {
-  font-size: 14px;
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
 }
 
-input[type='text'], select {
-  margin-top: 4px;
+.map-summary {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.field-grid label {
+  min-width: min(260px, 100%);
+}
+
+label {
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+input,
+select {
   padding: 6px 8px;
   border-radius: 4px;
   border: 1px solid #d1d5db;
@@ -514,23 +771,39 @@ input[type='text'], select {
   font-weight: 600;
 }
 
-.sub {
+.sub,
+.desc {
   font-size: 13px;
   color: #4b5563;
 }
 
 .desc {
   margin-top: 4px;
-  font-size: 13px;
   color: #6b7280;
 }
 
-button {
+button,
+.link-button {
   padding: 8px 12px;
   border-radius: 4px;
   border: none;
   background: #2563eb;
   color: #ffffff;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+button.secondary {
+  background: #6b7280;
+}
+
+button.danger {
+  background: #dc2626;
 }
 
 .error {
@@ -554,7 +827,7 @@ button {
 }
 
 .pending-hint p {
-  margin: 0 0 8px 0;
+  margin: 0 0 8px;
   font-size: 14px;
   color: #1e40af;
 }
@@ -566,12 +839,6 @@ button {
   border: 1px solid #dc2626;
   background: #ffffff;
   color: #dc2626;
-  cursor: pointer;
-}
-
-.btn-clear:hover {
-  background: #dc2626;
-  color: #ffffff;
 }
 
 .route {
@@ -584,5 +851,53 @@ button {
   color: #059669;
   font-weight: 600;
 }
-</style>
 
+.save-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.save-login-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.waypoint-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.waypoint-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.waypoint-row input {
+  flex: 1;
+}
+
+.sub-title {
+  font-size: 14px;
+  color: #374151;
+}
+
+.metrics-summary {
+  margin-top: 8px;
+}
+
+.extra-title {
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .section-header,
+  .waypoint-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>
