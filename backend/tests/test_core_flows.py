@@ -206,6 +206,29 @@ def test_rating_updates_target_aggregate(client):
         assert int(spot.rating_count) == 1
 
 
+def test_rating_rejects_missing_target_without_orphan_record(client):
+    user_id = _register_and_login(client, username="core_user_missing_target")
+
+    resp = client.post(
+        "/api/ratings",
+        json={
+            "user_id": user_id,
+            "target_type": "scenic_spot",
+            "target_id": 9999,
+            "score": 5,
+        },
+    )
+
+    assert resp.status_code == 400
+    data = json.loads(resp.data.decode("utf-8"))
+    assert data["error"] == "target not found"
+
+    app = client.application
+    with app.app_context():
+        saved = Rating.query.filter_by(user_id=user_id, target_id=9999).first()
+        assert saved is None
+
+
 def test_behavior_endpoint_persists_log(client):
     user_id = _register_and_login(client, username="core_user_c")
 
@@ -253,6 +276,37 @@ def test_recommend_endpoints_return_items_and_metrics(client):
     assert "request_count" in metrics_data
     assert "strategy_counts" in metrics_data
     assert "fallback_counts" in metrics_data
+
+
+def test_monitor_overview_returns_system_counts_and_metrics(client):
+    user_id = _register_and_login(client, username="core_user_monitor")
+    client.post(
+        "/api/behaviors",
+        json={
+            "user_id": user_id,
+            "target_type": "scenic_spot",
+            "target_id": 1,
+            "behavior_type": "click",
+            "device": "web",
+        },
+    )
+    client.get("/api/recommend/scenic-spots?limit=2")
+
+    resp = client.get("/api/monitor/overview")
+    assert resp.status_code == 200
+    data = json.loads(resp.data.decode("utf-8"))
+
+    assert data["health"]["status"] == "ok"
+    assert data["resources"]["scenic_spots"] == 3
+    assert data["resources"]["hotels"] == 1
+    assert data["resources"]["foods"] == 1
+    assert data["resources"]["content_rows"] == 1
+    assert data["users"]["users"] == 1
+    assert data["users"]["behavior_logs"] == 1
+    assert data["recommendation"]["request_count"] >= 1
+    assert "strategy_counts" in data["recommendation"]
+    assert "summary" in data["route"]
+    assert "uptime_sec" in data["route"]
 
 
 def test_similar_scenic_endpoint_uses_item_cf_summary(client):

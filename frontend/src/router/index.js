@@ -8,6 +8,7 @@ import RouteView from '../views/RouteView.vue';
 import TripsView from '../views/TripsView.vue';
 import TripCreateView from '../views/TripCreateView.vue';
 import TripDetailView from '../views/TripDetailView.vue';
+import MonitorView from '../views/MonitorView.vue';
 
 const routes = [
   {
@@ -54,6 +55,11 @@ const routes = [
     path: '/trips/:id',
     name: 'trip-detail',
     component: TripDetailView,
+  },
+  {
+    path: '/monitor',
+    name: 'monitor',
+    component: MonitorView,
   },
 ];
 

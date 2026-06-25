@@ -1370,10 +1370,12 @@ def recommend_similar_scenic_spots(spot_id: int):
 
 @recommend_bp.get("/metrics")
 def recommend_metrics():
-    return jsonify(
-        {
-            "fallback_counts": dict(fallback_metrics),
-            "strategy_counts": dict(strategy_metrics),
-            "request_count": request_count,
-        }
-    )
+    return jsonify(_build_recommend_metrics_payload())
+
+
+def _build_recommend_metrics_payload() -> dict:
+    return {
+        "fallback_counts": dict(fallback_metrics),
+        "strategy_counts": dict(strategy_metrics),
+        "request_count": request_count,
+    }

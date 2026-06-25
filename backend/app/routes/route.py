@@ -1015,6 +1015,10 @@ def route_options():
 @route_bp.get("/metrics")
 def route_metrics():
   """返回与路线选项相关的轻量运行指标（只读）。"""
+  return jsonify(_build_route_metrics_payload())
+
+
+def _build_route_metrics_payload() -> dict:
   try:
     uptime_sec = int(max(0, time.time() - _METRICS_START_TS))
   except Exception:
@@ -1067,4 +1071,4 @@ def route_metrics():
     "metrics": _METRICS,
     "summary": summary,
   }
-  return jsonify(payload)
+  return payload

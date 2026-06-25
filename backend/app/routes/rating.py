@@ -6,6 +6,12 @@ from ..models import Rating, ScenicSpot, Hotel, FoodPlace, User
 
 rating_bp = Blueprint("rating", __name__, url_prefix="/api/ratings")
 
+TARGET_MODELS = {
+    "scenic_spot": ScenicSpot,
+    "hotel": Hotel,
+    "food_place": FoodPlace,
+}
+
 
 @rating_bp.post("")
 def create_rating():
@@ -42,13 +48,17 @@ def create_rating():
     if score < 1 or score > 5:
         return jsonify({"error": "score must be between 1 and 5"}), 400
 
-    allowed_types = {"scenic_spot", "hotel", "food_place"}
-    if target_type not in allowed_types:
+    target_model = TARGET_MODELS.get(target_type)
+    if target_model is None:
         return jsonify({"error": "unsupported target_type"}), 400
 
     # 简单校验用户是否存在
     if db.session.get(User, user_id) is None:
         return jsonify({"error": "user not found"}), 400
+
+    obj = db.session.get(target_model, target_id)
+    if obj is None:
+        return jsonify({"error": "target not found"}), 400
 
     rating = Rating(
         user_id=user_id,
@@ -72,18 +82,8 @@ def create_rating():
     avg_score = float(avg_score) if avg_score is not None else None
     count = int(count or 0)
 
-    if target_type == "scenic_spot":
-        obj = db.session.get(ScenicSpot, target_id)
-    elif target_type == "hotel":
-        obj = db.session.get(Hotel, target_id)
-    elif target_type == "food_place":
-        obj = db.session.get(FoodPlace, target_id)
-    else:
-        obj = None
-
-    if obj is not None:
-        obj.rating_avg = avg_score
-        obj.rating_count = count
+    obj.rating_avg = avg_score
+    obj.rating_count = count
 
     db.session.commit()
 
