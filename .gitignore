@@ -40,3 +40,11 @@ Thumbs.db
 *.msi
 *.exe
 *.pdf
+*.docx
+
+# Local tooling state (project-surgeon 等本地工具产物)
+.project-surgeon-lite/
+
+# 与本项目无关的个人/行政文档（保留在本地磁盘，不纳入版本库）
+docs/打印费报销说明.md
+docs/海口旅游调研报告.md
