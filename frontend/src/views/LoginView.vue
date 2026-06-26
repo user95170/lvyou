@@ -25,7 +25,7 @@
 import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { login } from '../api/auth';
-import { setCurrentUser } from '../utils/user';
+import { setCurrentUser, setToken } from '../utils/user';
 
 const router = useRouter();
 
@@ -45,6 +45,9 @@ async function handleSubmit() {
     const data = resp.data;
     if (data && data.user) {
       setCurrentUser(data.user);
+      if (data.token) {
+        setToken(data.token);
+      }
       router.push('/');
     } else {
       error.value = '登录成功但未返回用户信息';

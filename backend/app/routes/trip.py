@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from ..db import db
 from ..models import FoodPlace, Hotel, ScenicSpot, Trip, TripDay, TripItem, User
+from ..services.auth_tokens import enforce_user
 
 trip_bp = Blueprint("trip", __name__, url_prefix="/api/trips")
 
@@ -307,6 +308,10 @@ def create_trip():
     if error:
         return jsonify({"error": error}), 400
 
+    auth_error = enforce_user(user_id)
+    if auth_error is not None:
+        return auth_error
+
     start_date, error = _parse_date(data.get("start_date"), "start_date")
     if error:
         return jsonify({"error": error}), 400
@@ -347,6 +352,10 @@ def update_trip(trip_id: int):
     if error:
         return jsonify({"error": error}), 400
 
+    auth_error = enforce_user(user_id)
+    if auth_error is not None:
+        return auth_error
+
     trip = _load_trip_for_user(trip_id, user_id)
     if trip is None:
         return jsonify({"error": "trip not found"}), 404
@@ -379,6 +388,10 @@ def delete_trip(trip_id: int):
     user_id, error = _parse_user_id(request.args.get("user_id"))
     if error:
         return jsonify({"error": error}), 400
+
+    auth_error = enforce_user(user_id)
+    if auth_error is not None:
+        return auth_error
 
     trip = _load_trip_for_user(trip_id, user_id)
     if trip is None:

@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 
 from ..db import db
 from ..models import UserBehaviorLog
+from ..services.auth_tokens import enforce_user
 
 behavior_bp = Blueprint("behavior", __name__, url_prefix="/api/behaviors")
 
@@ -39,6 +40,12 @@ def create_behavior():
         target_id = int(target_id)
     except (TypeError, ValueError):
         return jsonify({"error": "target_id must be an integer"}), 400
+
+    # 仅当请求声明了 user_id 时才做身份一致性校验（匿名行为放行）
+    if user_id is not None:
+        auth_error = enforce_user(user_id)
+        if auth_error is not None:
+            return auth_error
 
     log = UserBehaviorLog(
         user_id=user_id,
