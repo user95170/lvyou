@@ -16,6 +16,9 @@ from .itinerary import itinerary_bp
 from .agent import agent_bp
 from .trip import trip_bp
 from .monitor import monitor_bp
+from .transportation import transportation_bp
+from .activity import activity_bp
+from .specialty import specialty_bp
 
 
 def register_routes(app: Flask) -> None:
@@ -37,3 +40,6 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(agent_bp)
     app.register_blueprint(trip_bp)
     app.register_blueprint(monitor_bp)
+    app.register_blueprint(transportation_bp)
+    app.register_blueprint(activity_bp)
+    app.register_blueprint(specialty_bp)

@@ -463,3 +463,144 @@ class ContentStandard(db.Model):
             else None,
             "last_update": self.last_update.isoformat() if self.last_update else None,
         }
+
+
+class Transportation(db.Model):
+    """交通节点表 transportation（车站/机场/地铁站/接驳点等）。"""
+
+    __tablename__ = "transportation"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    city = db.Column(db.String(100), index=True)
+    district = db.Column(db.String(100))
+    address = db.Column(db.String(255))
+    longitude = db.Column(db.Numeric(10, 6))
+    latitude = db.Column(db.Numeric(10, 6))
+    transport_type = db.Column(db.String(50))  # 车站/机场/地铁站/接驳车/换乘点
+    phone = db.Column(db.String(50))  # 客服热线
+    operating_hours = db.Column(db.String(200))  # 运营/首末班时间
+    price_info = db.Column(db.String(200))  # 预期消费（车费/打车估算）
+    rating_avg = db.Column(db.Numeric(3, 2))
+    rating_count = db.Column(db.Integer, default=0)
+    tags = db.Column(db.Text)
+    description = db.Column(db.Text)
+    source = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "city": self.city,
+            "district": self.district,
+            "address": self.address,
+            "longitude": float(self.longitude) if self.longitude is not None else None,
+            "latitude": float(self.latitude) if self.latitude is not None else None,
+            "transport_type": self.transport_type,
+            "phone": self.phone,
+            "operating_hours": self.operating_hours,
+            "price_info": self.price_info,
+            "rating_avg": float(self.rating_avg) if self.rating_avg is not None else None,
+            "rating_count": self.rating_count,
+            "tags": self.tags,
+            "description": self.description,
+            "source": self.source,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Activity(db.Model):
+    """活动表 activity（节庆/演出/临时展览等）。"""
+
+    __tablename__ = "activity"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    city = db.Column(db.String(100), index=True)
+    district = db.Column(db.String(100))
+    address = db.Column(db.String(255))
+    longitude = db.Column(db.Numeric(10, 6))
+    latitude = db.Column(db.Numeric(10, 6))
+    activity_type = db.Column(db.String(50))  # 节庆/演出/展览/赛事
+    phone = db.Column(db.String(50))
+    hold_time = db.Column(db.String(200))  # 举办时间段
+    price_info = db.Column(db.String(200))  # 门票/参与费用
+    rating_avg = db.Column(db.Numeric(3, 2))
+    rating_count = db.Column(db.Integer, default=0)
+    tags = db.Column(db.Text)  # 适配人群等标签
+    description = db.Column(db.Text)  # 简介与参与说明
+    source = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "city": self.city,
+            "district": self.district,
+            "address": self.address,
+            "longitude": float(self.longitude) if self.longitude is not None else None,
+            "latitude": float(self.latitude) if self.latitude is not None else None,
+            "activity_type": self.activity_type,
+            "phone": self.phone,
+            "hold_time": self.hold_time,
+            "price_info": self.price_info,
+            "rating_avg": float(self.rating_avg) if self.rating_avg is not None else None,
+            "rating_count": self.rating_count,
+            "tags": self.tags,
+            "description": self.description,
+            "source": self.source,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Specialty(db.Model):
+    """特产表 specialty（特色商品/购物点）。"""
+
+    __tablename__ = "specialty"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)  # 商品或店铺
+    city = db.Column(db.String(100), index=True)
+    district = db.Column(db.String(100))
+    address = db.Column(db.String(255))
+    longitude = db.Column(db.Numeric(10, 6))
+    latitude = db.Column(db.Numeric(10, 6))
+    category = db.Column(db.String(50))  # 商品类别：奶制品/手工艺/食品等
+    phone = db.Column(db.String(50))
+    business_hours = db.Column(db.String(200))
+    price_info = db.Column(db.String(200))  # 价格区间
+    rating_avg = db.Column(db.Numeric(3, 2))
+    rating_count = db.Column(db.Integer, default=0)
+    tags = db.Column(db.Text)
+    description = db.Column(db.Text)  # 商品特色与推荐说明
+    source = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "city": self.city,
+            "district": self.district,
+            "address": self.address,
+            "longitude": float(self.longitude) if self.longitude is not None else None,
+            "latitude": float(self.latitude) if self.latitude is not None else None,
+            "category": self.category,
+            "phone": self.phone,
+            "business_hours": self.business_hours,
+            "price_info": self.price_info,
+            "rating_avg": float(self.rating_avg) if self.rating_avg is not None else None,
+            "rating_count": self.rating_count,
+            "tags": self.tags,
+            "description": self.description,
+            "source": self.source,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
