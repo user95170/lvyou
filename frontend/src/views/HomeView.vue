@@ -1,8 +1,8 @@
 <template>
   <div class="page">
-    <h2>?????</h2>
+    <h2>个性化推荐</h2>
     <p class="hint">
-      ?????????????????????????????????
+      结合你的偏好与多源数据，为你推荐内蒙古的景点、酒店与美食。
     </p>
 
     <div
@@ -11,7 +11,7 @@
       data-testid="home-cold-start-banner"
     >
       <p class="cold-start-text">
-        ????????????????????????????????
+        你的评分和偏好还比较少，推荐可能不够精准。先去浏览打分或完善偏好吧。
       </p>
       <div class="cold-start-actions">
         <router-link
@@ -19,60 +19,60 @@
           class="link-button"
           data-testid="home-cold-start-browse-link"
         >
-          ??????
+          去浏览打分
         </router-link>
-        <router-link to="/profile" class="link-button secondary">????</router-link>
+        <router-link to="/profile" class="link-button secondary">完善偏好</router-link>
       </div>
     </div>
 
     <section class="block">
       <header class="block-header">
-        <h3>????</h3>
+        <h3>推荐景点</h3>
         <div class="block-header-right">
           <button type="button" @click="fetchScenic" :disabled="loadingScenic">
-            {{ loadingScenic ? '???...' : '??' }}
+            {{ loadingScenic ? '加载中...' : '刷新' }}
           </button>
         </div>
       </header>
       <p v-if="scenicMeta" class="strategy-meta">
-        ?????{{ scenicMeta.strategy || scenicStrategy || 'multi_source' }}
+        当前策略：{{ scenicMeta.strategy || scenicStrategy || 'multi_source' }}
       </p>
       <details v-if="currentUserId()" class="advanced-strategy">
-        <summary>????</summary>
+        <summary>高级策略</summary>
         <div class="strategy-select">
           <label>
-            ??
+            策略
             <select v-model="scenicStrategy" :disabled="loadingScenic">
-              <option value="">??</option>
-              <option value="popular">??</option>
-              <option value="profile">??</option>
+              <option value="">自动</option>
+              <option value="popular">热门</option>
+              <option value="profile">画像</option>
               <option value="cf">CF</option>
               <option value="mf">MF</option>
-              <option value="hybrid">??</option>
+              <option value="hybrid">混合</option>
             </select>
           </label>
-          <p class="advanced-tip">??????????????????????</p>
+          <p class="advanced-tip">评分较少时 CF/MF/混合 会自动回退到热门或画像。</p>
         </div>
         <div class="metrics-block">
           <button type="button" @click="fetchMetrics" :disabled="loadingMetrics">
-            {{ loadingMetrics ? '?????...' : '??????' }}
+            {{ loadingMetrics ? '加载统计中...' : '查看推荐统计' }}
           </button>
           <p v-if="metricsError" class="error">{{ metricsError }}</p>
           <div v-if="metrics">
-            <p class="metrics-summary">?????{{ metrics.request_count ?? 0 }}</p>
+            <p class="metrics-summary">推荐请求数：{{ metrics.request_count ?? 0 }}</p>
             <div class="metrics-section">
-              <strong>???????</strong>
+              <strong>策略分布</strong>
               <ul>
                 <li v-for="(count, name) in metrics.strategy_counts || {}" :key="name">
-                  {{ name }}?{{ count }}
+                  {{ name }}：{{ count }}
                 </li>
               </ul>
             </div>
             <div class="metrics-section">
-              <strong>?????</strong>
+              <strong>回退统计</strong>
               <ul>
                 <li v-for="(count, name) in metrics.fallback_counts || {}" :key="name">
-                  {{ name }}?{{ count }}
+                  {{ name }}：{{ count }}
                 </li>
               </ul>
             </div>
@@ -89,11 +89,11 @@
           @click="handleScenicClick(item, $event)"
         >
           <h4>{{ item.name }}</h4>
-          <p class="sub">{{ item.city }} ? ?? {{ item.rating_avg ?? '??' }}</p>
+          <p class="sub">{{ item.city }} · 评分 {{ item.rating_avg ?? '暂无' }}</p>
           <p v-if="item.reasons && item.reasons.length" class="reason">
-            ?????{{ item.reasons.slice(0, 3).join('?') }}
+            推荐理由：{{ item.reasons.slice(0, 3).join('·') }}
           </p>
-          <p class="desc">{{ item.description?.slice(0, 60) || '??????????' }}</p>
+          <p class="desc">{{ item.description?.slice(0, 60) || '暂无更多介绍' }}</p>
           <div class="card-actions">
             <button
               type="button"
@@ -101,7 +101,7 @@
               data-testid="home-add-trip-btn"
               @click="handleAddToTrip(item)"
             >
-              ????
+              加入行程
             </button>
           </div>
         </li>
@@ -110,9 +110,9 @@
 
     <section class="block">
       <header class="block-header">
-        <h3>????</h3>
+        <h3>推荐酒店</h3>
         <button type="button" @click="fetchHotels" :disabled="loadingHotels">
-          {{ loadingHotels ? '???...' : '??' }}
+          {{ loadingHotels ? '加载中...' : '刷新' }}
         </button>
       </header>
       <div v-if="hotelError" class="error">{{ hotelError }}</div>
@@ -120,18 +120,18 @@
         <li v-for="item in hotelItems" :key="item.id" class="card">
           <h4>{{ item.name }}</h4>
           <p class="sub">
-            {{ item.city }} ? ?? {{ item.avg_price ?? '??' }} ? ?? {{ item.rating_avg ?? '??' }}
+            {{ item.city }} · 均价 {{ item.avg_price ?? '暂无' }} · 评分 {{ item.rating_avg ?? '暂无' }}
           </p>
-          <p class="desc">{{ item.tags || '????????' }}</p>
+          <p class="desc">{{ item.tags || '暂无更多介绍' }}</p>
         </li>
       </ul>
     </section>
 
     <section class="block">
       <header class="block-header">
-        <h3>????</h3>
+        <h3>推荐美食</h3>
         <button type="button" @click="fetchFoods" :disabled="loadingFoods">
-          {{ loadingFoods ? '???...' : '??' }}
+          {{ loadingFoods ? '加载中...' : '刷新' }}
         </button>
       </header>
       <div v-if="foodError" class="error">{{ foodError }}</div>
@@ -139,9 +139,9 @@
         <li v-for="item in foodItems" :key="item.id" class="card">
           <h4>{{ item.name }}</h4>
           <p class="sub">
-            {{ item.city }} ? {{ item.cuisine_type || '???' }} ? ?? {{ item.avg_price ?? '??' }}
+            {{ item.city }} · {{ item.cuisine_type || '特色美食' }} · 人均 {{ item.avg_price ?? '暂无' }}
           </p>
-          <p class="desc">{{ item.tags || '????????' }}</p>
+          <p class="desc">{{ item.tags || '暂无更多介绍' }}</p>
         </li>
       </ul>
     </section>
@@ -202,16 +202,16 @@ async function handleScenicClick(item, event) {
       device: 'web',
     });
   } catch (e) {
-    console.error('??????', e);
+    console.error('行为埋点失败', e);
   }
 }
 
 function handleAddToTrip(item) {
   const success = addPendingSpot(item);
   if (success) {
-    toast.success(`??"${item.name}"????????`);
+    toast.success(`已把"${item.name}"加入待规划列表`);
   } else {
-    toast.warning(`"${item.name}"?????????`);
+    toast.warning(`"${item.name}"已在待规划列表中`);
   }
 }
 
@@ -231,7 +231,7 @@ async function fetchScenic() {
     scenicItems.value = resp.data.items || [];
     scenicMeta.value = resp.data.meta || null;
   } catch (e) {
-    const errorMsg = e.response?.data?.error || '鍔犺浇鎺ㄨ崘鏅偣澶辫触';
+    const errorMsg = e.response?.data?.error || '加载推荐景点失败';
     scenicError.value = errorMsg;
     toast.error(errorMsg);
   } finally {
@@ -249,7 +249,7 @@ async function fetchHotels() {
     const resp = await getHotelRecommendations(params);
     hotelItems.value = resp.data.items || [];
   } catch (e) {
-    hotelError.value = e.response?.data?.error || '鍔犺浇閰掑簵鎺ㄨ崘澶辫触';
+    hotelError.value = e.response?.data?.error || '加载酒店推荐失败';
   } finally {
     loadingHotels.value = false;
   }
@@ -265,7 +265,7 @@ async function fetchFoods() {
     const resp = await getFoodRecommendations(params);
     foodItems.value = resp.data.items || [];
   } catch (e) {
-    foodError.value = e.response?.data?.error || '鍔犺浇缇庨鎺ㄨ崘澶辫触';
+    foodError.value = e.response?.data?.error || '加载美食推荐失败';
   } finally {
     loadingFoods.value = false;
   }
@@ -278,7 +278,7 @@ async function fetchMetrics() {
     const resp = await getRecommendMetrics();
     metrics.value = resp.data || null;
   } catch (e) {
-    metricsError.value = e.response?.data?.error || '鍔犺浇鎺ㄨ崘缁熻澶辫触';
+    metricsError.value = e.response?.data?.error || '加载推荐统计失败';
   } finally {
     loadingMetrics.value = false;
   }
@@ -465,4 +465,3 @@ onMounted(() => {
   font-size: 13px;
 }
 </style>
-
