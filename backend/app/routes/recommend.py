@@ -617,7 +617,25 @@ def _normalize_score_dict(scores):
     return {k: (float(v) - min_s) / denom for k, v in scores.items()}
 
 
-def _recommend_scenic_spots_cf_for_user(user_id, limit, city):
+def _apply_demo_rerank(ordered_spots, demo):
+    """对已按策略（CF/MF）排好序的候选列表做人口特征温和重排。
+
+    原始排名仍占主导：用排名归一分（越靠前越高）叠加较小的人口特征增量，
+    使"更适配该用户画像"的景点在相近排名间小幅上浮，不破坏策略本身的意图。
+    """
+    if not demo or not ordered_spots:
+        return ordered_spots
+    n = len(ordered_spots)
+    scored = []
+    for idx, spot in enumerate(ordered_spots):
+        rank_score = 1.0 - (idx / n)
+        delta = scenic_demographic_adjustment(spot, demo)[0]
+        scored.append((rank_score + delta, -idx, spot))
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    return [s for _, _, s in scored]
+
+
+def _recommend_scenic_spots_cf_for_user(user_id, limit, city, demo=None):
     ratings = (
         Rating.query.filter_by(user_id=user_id, target_type="scenic_spot")
         .order_by(Rating.created_at.asc())
@@ -650,10 +668,11 @@ def _recommend_scenic_spots_cf_for_user(user_id, limit, city):
 
     spot_map = {s.id: s for s in spots}
     ordered = [spot_map[sid] for sid in rec_ids if sid in spot_map]
+    ordered = _apply_demo_rerank(ordered, demo)
     return ordered[:limit]
 
 
-def _recommend_scenic_spots_hybrid_for_user(user_id, limit, city):
+def _recommend_scenic_spots_hybrid_for_user(user_id, limit, city, demo=None):
     ratings = Rating.query.filter_by(target_type="scenic_spot").all()
     if not ratings:
         return [], {}
@@ -710,6 +729,7 @@ def _recommend_scenic_spots_hybrid_for_user(user_id, limit, city):
 
     feature_map = _build_scenic_multi_source_features(candidates)
     candidate_ids = {s.id for s in candidates}
+    cand_map = {s.id: s for s in candidates}
 
     base_scores = {}
     for spot in candidates:
@@ -758,7 +778,10 @@ def _recommend_scenic_spots_hybrid_for_user(user_id, limit, city):
     if total_weight <= 0.0:
         candidates.sort(
             key=lambda spot: (
-                -_compute_multi_source_score(spot, feature_map),
+                -(
+                    _compute_multi_source_score(spot, feature_map)
+                    + scenic_demographic_adjustment(spot, demo)[0]
+                ),
                 -(float(spot.rating_avg) if spot.rating_avg is not None else 0.0),
                 -int(spot.rating_count or 0),
                 -spot.id,
@@ -779,6 +802,8 @@ def _recommend_scenic_spots_hybrid_for_user(user_id, limit, city):
             score += scale_cf * cf_norm.get(sid, 0.0)
         if mf_norm:
             score += scale_mf * mf_norm.get(sid, 0.0)
+        if demo:
+            score += scenic_demographic_adjustment(cand_map[sid], demo)[0]
         total_scores[sid] = score
 
     spot_map = {s.id: s for s in candidates}
@@ -886,7 +911,7 @@ def _recommend_mf_item_ids(
     return [sid for sid, _ in scores[:k]]
 
 
-def _recommend_scenic_spots_mf_for_user(user_id, limit, city):
+def _recommend_scenic_spots_mf_for_user(user_id, limit, city, demo=None):
     ratings = Rating.query.filter_by(target_type="scenic_spot").all()
     if not ratings:
         return []
@@ -956,6 +981,7 @@ def _recommend_scenic_spots_mf_for_user(user_id, limit, city):
 
     spot_map = {s.id: s for s in spots}
     ordered = [spot_map[sid] for sid in rec_ids if sid in spot_map]
+    ordered = _apply_demo_rerank(ordered, demo)
     return ordered[:limit]
 
 
@@ -1018,7 +1044,7 @@ def recommend_scenic_spots():
 
     # 优先尝试 CF/MF/Hybrid 个性化策略
     if strategy == "hybrid" and uid is not None:
-        items, feature_map = _recommend_scenic_spots_hybrid_for_user(uid, limit, city)
+        items, feature_map = _recommend_scenic_spots_hybrid_for_user(uid, limit, city, demo)
         if items:
             used_strategy = "hybrid"
         elif fallback_reason is None:
@@ -1027,7 +1053,7 @@ def recommend_scenic_spots():
         fallback_reason = "hybrid_user_required"
 
     if (items is None or not items) and strategy == "cf" and uid is not None:
-        items = _recommend_scenic_spots_cf_for_user(uid, limit, city)
+        items = _recommend_scenic_spots_cf_for_user(uid, limit, city, demo)
         if items:
             used_strategy = "cf"
         elif fallback_reason is None:
@@ -1036,7 +1062,7 @@ def recommend_scenic_spots():
         fallback_reason = "cf_user_required"
 
     if (items is None or not items) and strategy == "mf" and uid is not None:
-        items = _recommend_scenic_spots_mf_for_user(uid, limit, city)
+        items = _recommend_scenic_spots_mf_for_user(uid, limit, city, demo)
         if items:
             used_strategy = "mf"
         elif fallback_reason is None:

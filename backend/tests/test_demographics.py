@@ -20,6 +20,7 @@ from app.services.demographics import (
     region_taste_tags,
     scenic_demographic_adjustment,
 )
+from app.routes.recommend import _apply_demo_rerank
 
 
 @pytest.fixture
@@ -119,6 +120,27 @@ def test_scenic_adjustment_senior_quiet_vs_lively():
     lively_delta, _ = scenic_demographic_adjustment(Spot("娱乐", "夜"), demo_senior)
     assert quiet_delta > lively_delta
     assert any("安静" in r for r in quiet_reasons)
+
+
+class _FakeSpot:
+    def __init__(self, sid, category, tags=""):
+        self.id = sid
+        self.category = category
+        self.tags = tags
+
+
+def test_apply_demo_rerank_floats_senior_fit_up():
+    demo = {"age_group": "senior", "gender": "female", "home_region": None}
+    # 10 个中性点位，索引1处放一个适配长者的博物馆（紧邻索引0的中性项）
+    spots = [_FakeSpot(i, "温泉") for i in range(10)]
+    spots[1] = _FakeSpot(101, "博物馆", "文化")
+    out = _apply_demo_rerank(spots, demo)
+    assert out[0].id == 101  # 博物馆上浮到首位
+
+
+def test_apply_demo_rerank_no_demo_preserves_order():
+    spots = [_FakeSpot(1, "娱乐"), _FakeSpot(2, "博物馆")]
+    assert [s.id for s in _apply_demo_rerank(spots, None)] == [1, 2]
 
 
 def test_food_adjustment_home_region_taste():
