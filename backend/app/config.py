@@ -16,6 +16,12 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # 用于登录令牌签名的密钥。生产环境务必通过环境变量 SECRET_KEY 覆盖默认值。
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
+
+    # 登录令牌有效期（秒），默认 7 天。
+    AUTH_TOKEN_MAX_AGE = int(os.getenv("AUTH_TOKEN_MAX_AGE", str(7 * 24 * 3600)))
+
     # 高德地图 Web 服务 API key，通过环境变量 AMAP_WEB_KEY 传入。
     # 未配置时，行程规划将仅使用基于经纬度的近似距离，不调用外部服务。
     AMAP_WEB_KEY = os.getenv("AMAP_WEB_KEY")
