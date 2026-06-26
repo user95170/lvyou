@@ -191,9 +191,15 @@ def _compute_route_with_score(spots: List[ScenicSpot], dist_matrix: List[List[fl
   ordered = [spots[0]]
   total_km = 0.0
   
-  # 归一化景点热度分数
-  max_rating = max((s.rating_avg or 0.0) for s in spots)
-  min_rating = min((s.rating_avg or 0.0) for s in spots)
+  # 归一化景点热度分数（统一转 float，避免 Decimal/float 混算）
+  def _rating_of(s) -> float:
+    try:
+      return float(s.rating_avg) if s.rating_avg is not None else 0.0
+    except (TypeError, ValueError):
+      return 0.0
+
+  max_rating = max(_rating_of(s) for s in spots)
+  min_rating = min(_rating_of(s) for s in spots)
   rating_range = max_rating - min_rating if max_rating > min_rating else 1.0
   
   while remaining:
@@ -206,7 +212,7 @@ def _compute_route_with_score(spots: List[ScenicSpot], dist_matrix: List[List[fl
       distance = dist_matrix[current_idx][cand_idx]
       
       # 归一化景点评分 (越高越好，所以取反)
-      rating_score = 1.0 - ((candidate.rating_avg or 0.0) - min_rating) / rating_range
+      rating_score = 1.0 - (_rating_of(candidate) - min_rating) / rating_range
       
       # 综合得分 (距离越短越好，评分越高越好)
       combined_score = distance_weight * distance + popularity_weight * rating_score * 100
@@ -717,34 +723,20 @@ def _parse_start_location(data: dict):
   return _RouteOrigin(lng, lat)
 
 
-@route_bp.post("/plan")
-def plan_route():
-  """为给定的一组景点做路线规划（增强版）。
+def _build_plan_inputs(data: dict):
+  """解析并构建规划输入（景点顺序、缺失ID、起点）。
 
-  请求 JSON 示例：
-  {
-    "spot_ids": [3, 6, 5],
-    "start_spot_id": 3,        # 可选，默认为 spot_ids[0]
-    "optimize": "2opt",        # 可选，优化算法: "greedy" | "2opt" | "balanced"
-    "distance_weight": 0.7,   # 可选，距离权重 (仅balanced模式)
-    "popularity_weight": 0.3  # 可选，热度权重 (仅balanced模式)
-  }
-
-  返回：按游览顺序排列的景点列表和估算总路程（km）。
-  如配置 AMAP_WEB_KEY 且调用成功，则总路程来自高德驾车路径规划；
-  否则使用基于经纬度直线距离的近似值。
+  返回 (inputs, None) 或 (None, (response, code))。
+  inputs 含 ordered_input / missing_ids / origin / spot_ids。
   """
-
-  data = request.get_json(silent=True) or {}
   raw_ids = data.get("spot_ids") or []
-
   if not isinstance(raw_ids, list) or len(raw_ids) < 2:
-    return jsonify({"error": "spot_ids must be a list with at least two ids"}), 400
+    return None, (jsonify({"error": "spot_ids must be a list with at least two ids"}), 400)
 
   try:
     spot_ids = [int(x) for x in raw_ids]
   except (TypeError, ValueError):
-    return jsonify({"error": "spot_ids must contain integers"}), 400
+    return None, (jsonify({"error": "spot_ids must contain integers"}), 400)
 
   start_raw = data.get("start_spot_id")
   start_id = None
@@ -752,16 +744,16 @@ def plan_route():
     try:
       start_id = int(start_raw)
     except (TypeError, ValueError):
-      return jsonify({"error": "start_spot_id must be an integer"}), 400
+      return None, (jsonify({"error": "start_spot_id must be an integer"}), 400)
 
   # 可选：以用户当前位置作为起点（基于定位的路线规划）
   origin = _parse_start_location(data)
   if data.get("start_location") is not None and origin is None:
-    return jsonify({"error": "start_location must contain valid lng/lat"}), 400
+    return None, (jsonify({"error": "start_location must contain valid lng/lat"}), 400)
 
   spots = ScenicSpot.query.filter(ScenicSpot.id.in_(spot_ids)).all()
   if len(spots) < 2:
-    return jsonify({"error": "at least two scenic spots must exist"}), 400
+    return None, (jsonify({"error": "at least two scenic spots must exist"}), 400)
 
   id_to_spot = {s.id: s for s in spots}
   missing_ids = [sid for sid in spot_ids if sid not in id_to_spot]
@@ -784,47 +776,200 @@ def plan_route():
   if origin is not None:
     ordered_input = [origin] + ordered_input
 
-  # 获取优化策略参数
-  optimize_mode = (data.get("optimize") or "greedy").lower()
-  distance_weight = float(data.get("distance_weight", 0.7))
-  popularity_weight = float(data.get("popularity_weight", 0.3))
-  
-  # 预计算距离矩阵
+  return (
+    {
+      "ordered_input": ordered_input,
+      "missing_ids": missing_ids,
+      "origin": origin,
+      "spot_ids": spot_ids,
+    },
+    None,
+  )
+
+
+def _route_total_km(route) -> float:
+  """沿给定顺序累加相邻点的直线距离（缺坐标的相邻段跳过）。"""
+  total = 0.0
+  for i in range(len(route) - 1):
+    a, b = route[i], route[i + 1]
+    if (a.longitude is None or a.latitude is None or
+        b.longitude is None or b.latitude is None):
+      continue
+    total += _haversine_km(
+      float(a.longitude), float(a.latitude),
+      float(b.longitude), float(b.latitude),
+    )
+  return total
+
+
+def _order_by_popularity(ordered_input):
+  """保持起点不变，其余按人气（评分数、评分）降序排列。
+
+  采用 rating_count 作为人气主信号（批量数据中该字段有区分度），
+  使该方案与"最短路线"形成数据驱动的差异。
+  """
+  if not ordered_input:
+    return [], 0.0
+  head = [ordered_input[0]]
+  rest = ordered_input[1:]
+
+  def _pop_key(s):
+    try:
+      rc = int(getattr(s, "rating_count", 0) or 0)
+    except (TypeError, ValueError):
+      rc = 0
+    try:
+      ra = float(s.rating_avg) if getattr(s, "rating_avg", None) is not None else 0.0
+    except (TypeError, ValueError):
+      ra = 0.0
+    return (-rc, -ra)
+
+  route = head + sorted(rest, key=_pop_key)
+  return route, _route_total_km(route)
+
+
+def _plan_with_mode(ordered_input, optimize_mode, distance_weight=0.7, popularity_weight=0.3):
+  """按指定优化模式生成单一路线，返回 (route, total_km, algorithm, amap_used)。"""
   dist_matrix = _compute_distance_matrix(ordered_input)
-  
-  # 根据优化模式选择算法
+
   if optimize_mode == "2opt":
-    # 先贪心，再2-opt优化
-    greedy_route, greedy_km = _compute_route_greedy(ordered_input)
+    greedy_route, _ = _compute_route_greedy(ordered_input)
     dist_matrix_2opt = _compute_distance_matrix(greedy_route)
     final_route, approx_km = _optimize_route_2opt(greedy_route, dist_matrix_2opt)
     algorithm_name = "greedy_with_2opt_optimization"
   elif optimize_mode == "balanced":
-    # 综合距离和景点热度
     final_route, approx_km = _compute_route_with_score(
       ordered_input, dist_matrix, distance_weight, popularity_weight
     )
     algorithm_name = f"balanced_optimization_d{distance_weight}_p{popularity_weight}"
+  elif optimize_mode == "popularity":
+    final_route, approx_km = _order_by_popularity(ordered_input)
+    algorithm_name = "popularity_first"
   else:
-    # 默认贪心
     final_route, approx_km = _compute_route_greedy(ordered_input)
     algorithm_name = "greedy_nearest_neighbor_haversine"
 
   amap_km = _enhance_distance_with_amap(final_route)
   use_amap = amap_km is not None
   total_km = amap_km if use_amap else approx_km
+  return final_route, total_km, algorithm_name, use_amap
+
+
+# 多方案命名规划（基于定位 + 所选景点，离线可用）
+_PLAN_OPTION_SPECS = [
+  {"label": "最短路线", "optimize": "2opt"},
+  {"label": "人气优先", "optimize": "popularity"},
+  {"label": "兼顾热度", "optimize": "balanced", "distance_weight": 0.6, "popularity_weight": 0.4},
+]
+
+
+@route_bp.post("/plan")
+def plan_route():
+  """为给定的一组景点做路线规划（增强版）。
+
+  请求 JSON 示例：
+  {
+    "spot_ids": [3, 6, 5],
+    "start_spot_id": 3,        # 可选，默认为 spot_ids[0]
+    "start_location": {"lng": .., "lat": ..},  # 可选，以用户定位为起点
+    "optimize": "2opt",        # 可选，优化算法: "greedy" | "2opt" | "balanced"
+    "distance_weight": 0.7,   # 可选，距离权重 (仅balanced模式)
+    "popularity_weight": 0.3  # 可选，热度权重 (仅balanced模式)
+  }
+
+  返回：按游览顺序排列的景点列表和估算总路程（km）。
+  如配置 AMAP_WEB_KEY 且调用成功，则总路程来自高德驾车路径规划；
+  否则使用基于经纬度直线距离的近似值。
+  """
+
+  data = request.get_json(silent=True) or {}
+  inputs, err = _build_plan_inputs(data)
+  if err is not None:
+    resp, code = err
+    return resp, code
+
+  ordered_input = inputs["ordered_input"]
+  optimize_mode = (data.get("optimize") or "greedy").lower()
+  try:
+    distance_weight = float(data.get("distance_weight", 0.7))
+    popularity_weight = float(data.get("popularity_weight", 0.3))
+  except (TypeError, ValueError):
+    return jsonify({"error": "distance_weight and popularity_weight must be numbers"}), 400
+
+  final_route, total_km, algorithm_name, use_amap = _plan_with_mode(
+    ordered_input, optimize_mode, distance_weight, popularity_weight
+  )
 
   return jsonify(
     {
       "route": [s.to_dict() for s in final_route],
       "meta": {
         "total_distance_km": round(total_km, 2) if total_km is not None else None,
-        "spot_ids_input": spot_ids,
-        "missing_ids": missing_ids,
+        "spot_ids_input": inputs["spot_ids"],
+        "missing_ids": inputs["missing_ids"],
         "algorithm": algorithm_name,
         "optimize_mode": optimize_mode,
         "amap_used": use_amap,
-        "start_location_used": origin is not None,
+        "start_location_used": inputs["origin"] is not None,
+      },
+    }
+  )
+
+
+@route_bp.post("/plan-options")
+def plan_options():
+  """基于（可选）用户定位与所选景点，返回多种命名规划方案供对比。
+
+  请求体同 /plan（spot_ids、可选 start_location/start_spot_id）。
+  返回 options：每项含 label/optimize/route/total_distance_km/stop_count。
+  完全离线可用（无高德 Key 时按经纬度直线距离估算）。
+  """
+
+  data = request.get_json(silent=True) or {}
+  inputs, err = _build_plan_inputs(data)
+  if err is not None:
+    resp, code = err
+    return resp, code
+
+  ordered_input = inputs["ordered_input"]
+  options = []
+  seen_orders = set()
+  amap_used_any = False
+
+  for spec in _PLAN_OPTION_SPECS:
+    final_route, total_km, _algo, use_amap = _plan_with_mode(
+      ordered_input,
+      spec["optimize"],
+      spec.get("distance_weight", 0.7),
+      spec.get("popularity_weight", 0.3),
+    )
+    amap_used_any = amap_used_any or use_amap
+
+    # 顺序相同的方案去重（小规模景点下 greedy 与 2opt 可能一致）
+    order_key = tuple(s.id if getattr(s, "id", None) is not None else "origin" for s in final_route)
+    if order_key in seen_orders:
+      continue
+    seen_orders.add(order_key)
+
+    route_items = [s.to_dict() for s in final_route]
+    options.append(
+      {
+        "label": spec["label"],
+        "optimize": spec["optimize"],
+        "route": route_items,
+        "total_distance_km": round(total_km, 2) if total_km is not None else None,
+        "stop_count": sum(1 for it in route_items if not it.get("is_origin")),
+      }
+    )
+
+  return jsonify(
+    {
+      "options": options,
+      "meta": {
+        "spot_ids_input": inputs["spot_ids"],
+        "missing_ids": inputs["missing_ids"],
+        "start_location_used": inputs["origin"] is not None,
+        "amap_used": amap_used_any,
       },
     }
   )

@@ -73,6 +73,15 @@
         <button type="button" data-testid="route-plan-btn" @click="doPlan" :disabled="planning">
           {{ planning ? '规划中...' : '开始规划' }}
         </button>
+        <button
+          type="button"
+          class="secondary"
+          data-testid="route-plan-options-btn"
+          @click="doPlanOptions"
+          :disabled="loadingOptions"
+        >
+          {{ loadingOptions ? '对比中...' : '对比多方案' }}
+        </button>
       </div>
 
       <div class="filters location-row">
@@ -106,6 +115,27 @@
           </li>
         </ol>
         <p v-if="totalDistance != null" class="meta">估算总路程：{{ totalDistance }} km</p>
+      </div>
+
+      <div v-if="optionsError" class="error">{{ optionsError }}</div>
+
+      <div v-if="planOptions.length" class="plan-options" data-testid="route-plan-options">
+        <h4>多方案对比{{ optionsUsedLocation ? '（从我的位置出发）' : '' }}</h4>
+        <p class="hint">同一批景点的不同规划策略，可直接应用到上方结果并保存。</p>
+        <ul class="option-list">
+          <li v-for="(opt, idx) in planOptions" :key="idx" class="option-card">
+            <div class="option-head">
+              <span class="option-label">{{ opt.label }}</span>
+              <span class="option-metric">
+                约 {{ opt.total_distance_km ?? '-' }} km · {{ opt.stop_count }} 个景点
+              </span>
+            </div>
+            <p class="option-order">
+              {{ opt.route.map((s) => s.name).join(' → ') }}
+            </p>
+            <button type="button" class="apply-btn" @click="applyOption(opt)">应用此方案</button>
+          </li>
+        </ul>
       </div>
     </section>
 
@@ -353,7 +383,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AmapMapPanel from '../components/AmapMapPanel.vue';
 import { getScenicSpots } from '../api/resources';
-import { planRoute, routeMetrics, routeOptions } from '../api/route';
+import { planRoute, planRouteOptions, routeMetrics, routeOptions } from '../api/route';
 import { createTrip } from '../api/trips';
 import { toast } from '../utils/toast';
 import { getPendingSpots, clearPendingSpots } from '../utils/trip';
@@ -385,6 +415,11 @@ const savingTrip = ref(false);
 const useMyLocation = ref(false);
 const userLocation = ref(null);
 const locating = ref(false);
+
+const planOptions = ref([]);
+const loadingOptions = ref(false);
+const optionsError = ref('');
+const optionsUsedLocation = ref(false);
 
 const optOriginLng = ref('');
 const optOriginLat = ref('');
@@ -646,6 +681,51 @@ async function doPlan() {
   } finally {
     planning.value = false;
   }
+}
+
+async function doPlanOptions() {
+  optionsError.value = '';
+  planOptions.value = [];
+
+  if (selectedIds.value.length < 2) {
+    optionsError.value = '请至少勾选两个景点再对比方案';
+    return;
+  }
+  if (useMyLocation.value && !userLocation.value) {
+    optionsError.value = '请先点击“获取我的位置”，或取消勾选从当前位置出发';
+    return;
+  }
+
+  loadingOptions.value = true;
+  try {
+    const payload = { spot_ids: selectedIds.value };
+    if (useMyLocation.value && userLocation.value) {
+      payload.start_location = {
+        lng: userLocation.value.lng,
+        lat: userLocation.value.lat,
+      };
+    }
+    const resp = await planRouteOptions(payload);
+    planOptions.value = resp.data.options || [];
+    optionsUsedLocation.value = Boolean(resp.data.meta?.start_location_used);
+    if (!planOptions.value.length) {
+      toast.error('未生成可对比的方案');
+    }
+  } catch (e) {
+    const msg = e.response?.data?.error || '对比方案失败';
+    optionsError.value = msg;
+    toast.error(msg);
+  } finally {
+    loadingOptions.value = false;
+  }
+}
+
+function applyOption(opt) {
+  route.value = opt.route || [];
+  totalDistance.value = opt.total_distance_km ?? null;
+  algorithmUsed.value = opt.optimize || '';
+  refreshDefaultSaveTitle(route.value);
+  toast.success(`已应用「${opt.label}」方案`);
 }
 
 async function saveRouteAsTrip() {
@@ -951,6 +1031,70 @@ button.danger {
 
 .location-row {
   margin-top: 10px;
+}
+
+.plan-options {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.plan-options h4 {
+  margin: 0 0 4px;
+}
+
+.option-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.option-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f9fafb;
+}
+
+.option-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.option-label {
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+.option-metric {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.option-order {
+  margin: 8px 0;
+  font-size: 13px;
+  color: #374151;
+}
+
+.apply-btn {
+  padding: 4px 12px;
+  font-size: 13px;
+  border-radius: 4px;
+  border: 1px solid #2563eb;
+  background: #ffffff;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.apply-btn:hover {
+  background: #2563eb;
+  color: #ffffff;
 }
 
 label.inline {

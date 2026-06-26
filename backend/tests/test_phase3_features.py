@@ -97,6 +97,29 @@ def test_route_plan_invalid_start_location(client):
     assert resp.status_code == 400
 
 
+def test_route_plan_options_with_location(client):
+    resp = client.post(
+        "/api/route/plan-options",
+        json={"spot_ids": [1, 2, 3], "start_location": {"lng": 111.65, "lat": 40.80}},
+    )
+    assert resp.status_code == 200
+    data = json.loads(resp.data.decode("utf-8"))
+    assert data["meta"]["start_location_used"] is True
+    options = data["options"]
+    assert len(options) >= 1
+    labels = [o["label"] for o in options]
+    assert "最短路线" in labels
+    for opt in options:
+        assert opt["route"][0].get("is_origin") is True  # 起点为用户位置
+        assert "total_distance_km" in opt
+        assert opt["stop_count"] == 3  # 3 个景点（不含起点）
+
+
+def test_route_plan_options_invalid_spot_ids(client):
+    resp = client.post("/api/route/plan-options", json={"spot_ids": [1]})
+    assert resp.status_code == 400
+
+
 def _register_full(client, username, **demo):
     payload = {"username": username, "password": "123456"}
     payload.update(demo)
