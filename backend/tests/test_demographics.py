@@ -208,6 +208,21 @@ def test_food_recommend_includes_home_region_reason(client):
     assert any("家乡口味" in r for r in spicy.get("reasons", []))
 
 
+def test_personalized_map_includes_demographic_fit_reason(client):
+    reg = _register(client, "map_senior", age=66, gender="female")
+    uid = json.loads(reg.data.decode("utf-8"))["id"]
+
+    resp = client.post(
+        "/api/map/personalized",
+        json={"user_id": uid, "categories": ["scenic_spot"], "limit_per_type": 10},
+    )
+    assert resp.status_code == 200
+    body = json.loads(resp.data.decode("utf-8"))
+    assert body["meta"]["profile_used"] is True
+    museum = next(s for s in body["items"]["scenic_spot"] if s["id"] == 1)
+    assert any("安静" in r for r in museum.get("fit_reasons", []))
+
+
 def test_scenic_recommend_includes_senior_reason(client):
     reg = _register(client, "senior_user", age=66, gender="female")
     uid = json.loads(reg.data.decode("utf-8"))["id"]
