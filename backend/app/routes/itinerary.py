@@ -257,7 +257,7 @@ def suggest_itinerary():
     def _top_q(model, limit: int):
         q = model.query
         if city:
-            q = q.filter(model.city == city)
+            q = q.filter(model.city.like(f"%{city}%"))
         if hasattr(model, "rating_avg") and hasattr(model, "rating_count"):
             q = q.order_by(model.rating_avg.desc(), model.rating_count.desc(), model.id.desc())
         else:

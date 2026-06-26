@@ -39,7 +39,7 @@ def list_scenic_spots():
     # 过滤条件
     city = request.args.get("city")
     if city:
-        query = query.filter(ScenicSpot.city == city)
+        query = query.filter(ScenicSpot.city.like(f"%{city}%"))
 
     spot_type = request.args.get("type")
     if spot_type:

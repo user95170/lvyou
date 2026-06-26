@@ -10,41 +10,6 @@ def seed() -> None:
     with app.app_context():
         db.create_all()
 
-        # scenic spots
-        spots = [
-            dict(
-                name="故宫博物院",
-                city="北京",
-                address="东城区景山前街4号",
-                longitude=116.397,
-                latitude=39.918,
-                category="scenic",
-                description="北京故宫，世界文化遗产"
-            ),
-            dict(
-                name="天安门广场",
-                city="北京",
-                address="东城区东长安街",
-                longitude=116.404,
-                latitude=39.915,
-                category="scenic",
-                description="北京城市地标"
-            ),
-            dict(
-                name="北海公园",
-                city="北京",
-                address="西城区文津街1号",
-                longitude=116.391,
-                latitude=39.925,
-                category="park",
-                description="历史皇家园林"
-            ),
-        ]
-        for s in spots:
-            exists = ScenicSpot.query.filter_by(name=s["name"], city=s["city"]).first()
-            if not exists:
-                db.session.add(ScenicSpot(**s))
-
         # Inner Mongolia scenic spots
         im_spots = [
             dict(name="大召寺", city="呼和浩特", address="玉泉区大召前街西口南50米", longitude=111.654, latitude=40.807, category="temple", description="呼和浩特著名藏传佛教寺院"),

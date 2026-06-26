@@ -38,7 +38,7 @@ def list_food_places():
 
     city = request.args.get("city")
     if city:
-        query = query.filter(FoodPlace.city == city)
+        query = query.filter(FoodPlace.city.like(f"%{city}%"))
 
     cuisine_type = request.args.get("cuisine_type")
     if cuisine_type:

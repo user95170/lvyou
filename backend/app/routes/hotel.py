@@ -38,7 +38,7 @@ def list_hotels():
 
     city = request.args.get("city")
     if city:
-        query = query.filter(Hotel.city == city)
+        query = query.filter(Hotel.city.like(f"%{city}%"))
 
     star_level = request.args.get("star_level")
     if star_level:
