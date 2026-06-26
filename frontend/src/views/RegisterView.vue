@@ -14,6 +14,38 @@
         邮箱（可选）
         <input v-model="form.email" data-testid="register-email" type="email" placeholder="you@example.com" />
       </label>
+
+      <p class="section-hint">以下信息用于更懂你的个性化推荐（均可选）：</p>
+
+      <label>
+        性别（可选）
+        <select v-model="form.gender" data-testid="register-gender">
+          <option value="">不愿透露</option>
+          <option value="male">男</option>
+          <option value="female">女</option>
+        </select>
+      </label>
+      <label>
+        年龄（可选）
+        <input
+          v-model="form.age"
+          data-testid="register-age"
+          type="number"
+          min="1"
+          max="120"
+          placeholder="例如：28"
+        />
+      </label>
+      <label>
+        常住地 / 籍贯（可选）
+        <input
+          v-model="form.home_region"
+          data-testid="register-region"
+          type="text"
+          placeholder="例如：湖南、内蒙古"
+        />
+      </label>
+
       <button type="submit" data-testid="register-submit" :disabled="submitting">
         {{ submitting ? '注册中...' : '注册' }}
       </button>
@@ -37,6 +69,9 @@ const form = reactive({
   username: '',
   password: '',
   email: '',
+  gender: '',
+  age: '',
+  home_region: '',
 });
 
 const submitting = ref(false);
@@ -54,6 +89,15 @@ async function handleSubmit() {
     };
     if (form.email) {
       payload.email = form.email;
+    }
+    if (form.gender) {
+      payload.gender = form.gender;
+    }
+    if (form.age !== '' && form.age !== null) {
+      payload.age = Number(form.age);
+    }
+    if (form.home_region && form.home_region.trim()) {
+      payload.home_region = form.home_region.trim();
     }
 
     await register(payload);
@@ -91,11 +135,18 @@ label {
   font-size: 14px;
 }
 
-input {
+input,
+select {
   margin-top: 4px;
   padding: 6px 8px;
   border-radius: 4px;
   border: 1px solid #d1d5db;
+}
+
+.section-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #6b7280;
 }
 
 button {

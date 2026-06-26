@@ -2,6 +2,8 @@ from flask import Blueprint, jsonify, request
 
 from ..db import db
 from ..models import User
+from ..services.demographics import parse_demographics_payload as _parse_demographics
+from ..services.auth_tokens import generate_token
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -38,6 +40,11 @@ def register():
             400,
         )
 
+    # 可选人口特征（性别/年龄/地域），用于细粒度个性化推荐
+    gender, age, home_region, demo_error = _parse_demographics(data)
+    if demo_error is not None:
+        return jsonify({"error": demo_error}), 400
+
     # 唯一性检查
     if User.query.filter_by(username=username).first() is not None:
         return jsonify({"error": "username already exists"}), 400
@@ -51,6 +58,12 @@ def register():
         phone=phone,
         register_source="web",
     )
+    if gender is not None:
+        user.gender = gender
+    if age is not None:
+        user.age = age
+    if home_region is not None:
+        user.home_region = home_region
     user.set_password(password)
 
     db.session.add(user)
@@ -63,6 +76,9 @@ def register():
                 "username": user.username,
                 "email": user.email,
                 "phone": user.phone,
+                "gender": user.gender,
+                "age": user.age,
+                "home_region": user.home_region,
                 "created_at": user.created_at.isoformat()
                 if user.created_at
                 else None,
@@ -103,6 +119,7 @@ def login():
     return jsonify(
         {
             "message": "login_success",
+            "token": generate_token(user.id),
             "user": {
                 "id": user.id,
                 "username": user.username,

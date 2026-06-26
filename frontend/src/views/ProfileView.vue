@@ -121,6 +121,18 @@
           <div v-if="!userId" class="muted">登录后才会保存画像。</div>
           <div v-else class="kv">
             <div class="row">
+              <span class="k">性别</span>
+              <span class="v">{{ genderLabel(form.gender) }}</span>
+            </div>
+            <div class="row">
+              <span class="k">年龄</span>
+              <span class="v">{{ form.age === '' || form.age === null ? '未设置' : form.age }}</span>
+            </div>
+            <div class="row">
+              <span class="k">常住地/籍贯</span>
+              <span class="v">{{ form.home_region || '未设置' }}</span>
+            </div>
+            <div class="row">
               <span class="k">出游风格</span>
               <span class="v">{{ travelStyleLabel(form.travel_style) }}</span>
             </div>
@@ -141,6 +153,35 @@
           <details v-if="userId" class="edit">
             <summary>手动编辑画像</summary>
             <form class="mini-form" @submit.prevent="handleSubmit">
+              <label>
+                性别
+                <select v-model="form.gender">
+                  <option value="">不愿透露</option>
+                  <option value="male">男</option>
+                  <option value="female">女</option>
+                </select>
+              </label>
+
+              <label>
+                年龄
+                <input
+                  v-model="form.age"
+                  type="number"
+                  min="1"
+                  max="120"
+                  placeholder="例如：28"
+                />
+              </label>
+
+              <label>
+                常住地 / 籍贯
+                <input
+                  v-model="form.home_region"
+                  type="text"
+                  placeholder="例如：湖南、内蒙古"
+                />
+              </label>
+
               <label>
                 出游风格
                 <select v-model="form.travel_style">
@@ -315,6 +356,9 @@ const form = reactive({
   budget_level: null,
   prefer_scenic_types: '',
   prefer_food_types: '',
+  gender: '',
+  age: '',
+  home_region: '',
 });
 
 const submitting = ref(false);
@@ -443,6 +487,21 @@ function applyProfileToForm(profile) {
   form.budget_level = profile.budget_level ?? null;
   form.prefer_scenic_types = profile.prefer_scenic_types || '';
   form.prefer_food_types = profile.prefer_food_types || '';
+  if ('gender' in profile) {
+    form.gender = profile.gender && profile.gender !== 'unknown' ? profile.gender : '';
+  }
+  if ('age' in profile) {
+    form.age = profile.age ?? '';
+  }
+  if ('home_region' in profile) {
+    form.home_region = profile.home_region || '';
+  }
+}
+
+function genderLabel(value) {
+  if (value === 'male') return '男';
+  if (value === 'female') return '女';
+  return '未设置';
 }
 
 async function sendChatText(text) {
@@ -518,6 +577,9 @@ async function handleSubmit() {
       budget_level: form.budget_level ?? null,
       prefer_scenic_types: form.prefer_scenic_types || null,
       prefer_food_types: form.prefer_food_types || null,
+      gender: form.gender || 'unknown',
+      age: form.age === '' || form.age === null ? null : Number(form.age),
+      home_region: form.home_region ? form.home_region.trim() : null,
     };
     await saveUserProfile(payload);
     success.value = '画像已保存';

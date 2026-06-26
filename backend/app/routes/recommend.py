@@ -15,6 +15,11 @@ from ..models import (
     ContentStandard,
     Rating,
 )
+from ..services.demographics import (
+    load_user_demographics,
+    scenic_demographic_adjustment,
+    food_demographic_adjustment,
+)
 
 recommend_bp = Blueprint("recommend", __name__, url_prefix="/api/recommend")
 fallback_metrics = defaultdict(int)
@@ -429,7 +434,7 @@ def _compute_food_multi_source_score(food: FoodPlace, feature_map: dict) -> floa
     return internal_pop + ota_rating + social_heat + 2.0 * social_sentiment
 
 
-def _build_scenic_reasons(spot: ScenicSpot, feature_map: dict, user_profile, preferred_set):
+def _build_scenic_reasons(spot: ScenicSpot, feature_map: dict, user_profile, preferred_set, demo=None):
     reasons = []
     features = feature_map.get(spot.id) or {}
 
@@ -480,6 +485,58 @@ def _build_scenic_reasons(spot: ScenicSpot, feature_map: dict, user_profile, pre
 
     if preferred_set and spot.category and spot.category in preferred_set:
         reasons.append(f"符合你的偏好类型：{spot.category}")
+
+    if demo:
+        _, demo_reasons = scenic_demographic_adjustment(spot, demo)
+        for r in demo_reasons:
+            if r not in reasons:
+                reasons.append(r)
+
+    return reasons
+
+
+def _build_food_reasons(food: FoodPlace, feature_map: dict, preferred_set, demo=None):
+    reasons = []
+    features = feature_map.get(food.id) or {}
+
+    try:
+        rating_avg = float(food.rating_avg) if food.rating_avg is not None else 0.0
+    except (TypeError, ValueError):
+        rating_avg = 0.0
+    try:
+        rating_count = int(food.rating_count or 0)
+    except (TypeError, ValueError):
+        rating_count = 0
+
+    if rating_avg >= 4.5 and rating_count >= 50:
+        reasons.append("本站评分较高")
+
+    try:
+        ota_rating = float(features.get("ota_rating", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        ota_rating = 0.0
+    if ota_rating >= 4.6:
+        reasons.append("OTA 平台评分优秀")
+    elif ota_rating >= 4.5:
+        reasons.append("OTA 平台评分较好")
+
+    if preferred_set:
+        cuisine = (food.cuisine_type or "").strip()
+        matched = cuisine in preferred_set
+        if not matched and food.tags:
+            for t in preferred_set:
+                if t and t in food.tags:
+                    matched = True
+                    break
+        if matched:
+            label = cuisine or "你喜欢的口味"
+            reasons.append(f"符合你的偏好类型：{label}")
+
+    if demo:
+        _, demo_reasons = food_demographic_adjustment(food, demo)
+        for r in demo_reasons:
+            if r not in reasons:
+                reasons.append(r)
 
     return reasons
 
@@ -586,7 +643,7 @@ def _recommend_scenic_spots_cf_for_user(user_id, limit, city):
 
     query = ScenicSpot.query.filter(ScenicSpot.id.in_(rec_ids))
     if city:
-        query = query.filter(ScenicSpot.city == city)
+        query = query.filter(ScenicSpot.city.like(f"%{city}%"))
     spots = query.all()
     if not spots:
         return []
@@ -638,7 +695,7 @@ def _recommend_scenic_spots_hybrid_for_user(user_id, limit, city):
 
     query = ScenicSpot.query
     if city:
-        query = query.filter(ScenicSpot.city == city)
+        query = query.filter(ScenicSpot.city.like(f"%{city}%"))
 
     query = query.order_by(
         ScenicSpot.rating_avg.desc(),
@@ -892,7 +949,7 @@ def _recommend_scenic_spots_mf_for_user(user_id, limit, city):
 
     query = ScenicSpot.query.filter(ScenicSpot.id.in_(rec_ids))
     if city:
-        query = query.filter(ScenicSpot.city == city)
+        query = query.filter(ScenicSpot.city.like(f"%{city}%"))
     spots = query.all()
     if not spots:
         return []
@@ -931,6 +988,8 @@ def recommend_scenic_spots():
     user_profile = None
     if uid is not None:
         user_profile = UserProfile.query.filter_by(user_id=uid).first()
+
+    demo = load_user_demographics(uid)
 
     is_cold_start = False
     if uid is not None:
@@ -989,7 +1048,7 @@ def recommend_scenic_spots():
     if items is None or not items:
         query = ScenicSpot.query
         if city:
-            query = query.filter(ScenicSpot.city == city)
+            query = query.filter(ScenicSpot.city.like(f"%{city}%"))
 
         query = query.order_by(
             ScenicSpot.rating_avg.desc(),
@@ -1006,6 +1065,7 @@ def recommend_scenic_spots():
 
             def sort_key_no_profile(spot: ScenicSpot):
                 score = _compute_multi_source_score(spot, feature_map)
+                score += scenic_demographic_adjustment(spot, demo)[0]
                 rating_avg = float(spot.rating_avg) if spot.rating_avg is not None else 0.0
                 rating_count = int(spot.rating_count or 0)
                 return (-score, -rating_avg, -rating_count, -spot.id)
@@ -1029,6 +1089,7 @@ def recommend_scenic_spots():
             def sort_key(spot: ScenicSpot):
                 in_pref = 0 if (spot.category in preferred_set) else 1
                 score = _compute_multi_source_score(spot, feature_map)
+                score += scenic_demographic_adjustment(spot, demo)[0]
                 rating_avg = float(spot.rating_avg) if spot.rating_avg is not None else 0.0
                 rating_count = int(spot.rating_count or 0)
                 return (in_pref, -score, -rating_avg, -rating_count, -spot.id)
@@ -1043,7 +1104,7 @@ def recommend_scenic_spots():
         existing_ids = {s.id for s in items}
         backfill_query = ScenicSpot.query
         if city:
-            backfill_query = backfill_query.filter(ScenicSpot.city == city)
+            backfill_query = backfill_query.filter(ScenicSpot.city.like(f"%{city}%"))
         backfill_query = backfill_query.order_by(
             ScenicSpot.rating_avg.desc(),
             ScenicSpot.rating_count.desc(),
@@ -1074,7 +1135,7 @@ def recommend_scenic_spots():
     result_items = []
     for spot in items:
         data = spot.to_dict()
-        reasons = _build_scenic_reasons(spot, feature_map, user_profile, preferred_set)
+        reasons = _build_scenic_reasons(spot, feature_map, user_profile, preferred_set, demo)
         if reasons:
             data["reasons"] = reasons
         result_items.append(data)
@@ -1137,7 +1198,7 @@ def recommend_hotels():
 
     query = Hotel.query
     if city:
-        query = query.filter(Hotel.city == city)
+        query = query.filter(Hotel.city.like(f"%{city}%"))
 
     query = query.order_by(
         Hotel.rating_avg.desc(),
@@ -1231,9 +1292,11 @@ def recommend_foods():
     if uid is not None:
         user_profile = UserProfile.query.filter_by(user_id=uid).first()
 
+    demo = load_user_demographics(uid)
+
     query = FoodPlace.query
     if city:
-        query = query.filter(FoodPlace.city == city)
+        query = query.filter(FoodPlace.city.like(f"%{city}%"))
 
     query = query.order_by(
         FoodPlace.rating_avg.desc(),
@@ -1270,6 +1333,7 @@ def recommend_foods():
                         break
 
             score = _compute_food_multi_source_score(food, feature_map)
+            score += food_demographic_adjustment(food, demo)[0]
             rating_avg = float(food.rating_avg) if food.rating_avg is not None else 0.0
             rating_count = int(food.rating_count or 0)
             return (in_pref, -score, -rating_avg, -rating_count, -food.id)
@@ -1278,6 +1342,7 @@ def recommend_foods():
     else:
         def sort_key_no_profile(food: FoodPlace):
             score = _compute_food_multi_source_score(food, feature_map)
+            score += food_demographic_adjustment(food, demo)[0]
             rating_avg = float(food.rating_avg) if food.rating_avg is not None else 0.0
             rating_count = int(food.rating_count or 0)
             return (-score, -rating_avg, -rating_count, -food.id)
@@ -1286,9 +1351,17 @@ def recommend_foods():
 
     items = foods[:limit]
 
+    result_items = []
+    for food in items:
+        data = food.to_dict()
+        reasons = _build_food_reasons(food, feature_map, preferred_set, demo)
+        if reasons:
+            data["reasons"] = reasons
+        result_items.append(data)
+
     return jsonify(
         {
-            "items": [food.to_dict() for food in items],
+            "items": result_items,
             "meta": {"limit": limit, "city": city, "user_id": uid},
         }
     )
