@@ -75,7 +75,26 @@
         </button>
       </div>
 
-      <p class="hint">`2-opt` 通常能得到更短的路线，`balanced` 会兼顾距离和热度。</p>
+      <div class="filters location-row">
+        <label class="inline">
+          <input type="checkbox" v-model="useMyLocation" />
+          从我的当前位置出发
+        </label>
+        <button
+          type="button"
+          class="secondary"
+          data-testid="route-locate-btn"
+          @click="locateMe"
+          :disabled="locating"
+        >
+          {{ locating ? '定位中...' : '获取我的位置' }}
+        </button>
+        <span v-if="userLocation" class="hint">
+          已获取位置：{{ userLocation.lng.toFixed(5) }}, {{ userLocation.lat.toFixed(5) }}
+        </span>
+      </div>
+
+      <p class="hint">`2-opt` 通常能得到更短的路线，`balanced` 会兼顾距离和热度；勾选定位后将以你的位置为起点。</p>
 
       <div v-if="planError" class="error">{{ planError }}</div>
 
@@ -363,6 +382,10 @@ const saveTitle = ref('');
 const saveStartDate = ref('');
 const savingTrip = ref(false);
 
+const useMyLocation = ref(false);
+const userLocation = ref(null);
+const locating = ref(false);
+
 const optOriginLng = ref('');
 const optOriginLat = ref('');
 const optDestLng = ref('');
@@ -559,6 +582,30 @@ async function loadScenic() {
   }
 }
 
+function locateMe() {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) {
+    toast.error('当前浏览器不支持定位');
+    return;
+  }
+  locating.value = true;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userLocation.value = {
+        lng: pos.coords.longitude,
+        lat: pos.coords.latitude,
+      };
+      useMyLocation.value = true;
+      locating.value = false;
+      toast.success('已获取你的当前位置');
+    },
+    (err) => {
+      locating.value = false;
+      toast.error(err?.message || '定位失败，请检查浏览器定位权限');
+    },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
 async function doPlan() {
   planError.value = '';
   route.value = [];
@@ -570,12 +617,23 @@ async function doPlan() {
     return;
   }
 
+  if (useMyLocation.value && !userLocation.value) {
+    planError.value = '请先点击“获取我的位置”，或取消勾选从当前位置出发';
+    return;
+  }
+
   planning.value = true;
   try {
     const payload = {
       spot_ids: selectedIds.value,
       optimize: optimizeMode.value,
     };
+    if (useMyLocation.value && userLocation.value) {
+      payload.start_location = {
+        lng: userLocation.value.lng,
+        lat: userLocation.value.lat,
+      };
+    }
     const resp = await planRoute(payload);
     route.value = resp.data.route || [];
     totalDistance.value = resp.data.meta?.total_distance_km ?? null;
@@ -620,18 +678,20 @@ async function saveRouteAsTrip() {
         day_index: 1,
         date: startDate,
         note: null,
-        items: route.value.map((spot, index) => ({
-          item_index: index + 1,
-          item_type: 'scenic_spot',
-          ref_id: spot.id ?? null,
-          title_snapshot: spot.name || `景点${index + 1}`,
-          city_snapshot: spot.city || originCity,
-          address_snapshot: spot.address || null,
-          start_time: null,
-          end_time: null,
-          transport_mode: null,
-          note: null,
-        })),
+        items: route.value
+          .filter((spot) => !spot.is_origin)
+          .map((spot, index) => ({
+            item_index: index + 1,
+            item_type: 'scenic_spot',
+            ref_id: spot.id ?? null,
+            title_snapshot: spot.name || `景点${index + 1}`,
+            city_snapshot: spot.city || originCity,
+            address_snapshot: spot.address || null,
+            start_time: null,
+            end_time: null,
+            transport_mode: null,
+            note: null,
+          })),
       },
     ],
   };
@@ -887,6 +947,16 @@ button.danger {
 
 .metrics-summary {
   margin-top: 8px;
+}
+
+.location-row {
+  margin-top: 10px;
+}
+
+label.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 
 .extra-title {

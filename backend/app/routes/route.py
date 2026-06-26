@@ -678,6 +678,45 @@ def _amap_v5_route_options_transit(
     })
   return options
 
+class _RouteOrigin:
+  """用户当前位置作为路线起点的虚拟节点（不写入数据库）。"""
+
+  def __init__(self, lng: float, lat: float, name: str = "我的位置"):
+    self.id = None
+    self.name = name
+    self.longitude = lng
+    self.latitude = lat
+    self.rating_avg = None
+    self.rating_count = 0
+
+  def to_dict(self) -> dict:
+    return {
+      "id": None,
+      "name": self.name,
+      "longitude": float(self.longitude),
+      "latitude": float(self.latitude),
+      "is_origin": True,
+      "type": "origin",
+    }
+
+
+def _parse_start_location(data: dict):
+  """解析可选的用户起点位置 start_location: {lng, lat}。无效或缺失返回 None。"""
+  loc = data.get("start_location")
+  if not isinstance(loc, dict):
+    return None
+  lng = loc.get("lng", loc.get("longitude"))
+  lat = loc.get("lat", loc.get("latitude"))
+  try:
+    lng = float(lng)
+    lat = float(lat)
+  except (TypeError, ValueError):
+    return None
+  if not (-180.0 <= lng <= 180.0 and -90.0 <= lat <= 90.0):
+    return None
+  return _RouteOrigin(lng, lat)
+
+
 @route_bp.post("/plan")
 def plan_route():
   """为给定的一组景点做路线规划（增强版）。
@@ -715,6 +754,11 @@ def plan_route():
     except (TypeError, ValueError):
       return jsonify({"error": "start_spot_id must be an integer"}), 400
 
+  # 可选：以用户当前位置作为起点（基于定位的路线规划）
+  origin = _parse_start_location(data)
+  if data.get("start_location") is not None and origin is None:
+    return jsonify({"error": "start_location must contain valid lng/lat"}), 400
+
   spots = ScenicSpot.query.filter(ScenicSpot.id.in_(spot_ids)).all()
   if len(spots) < 2:
     return jsonify({"error": "at least two scenic spots must exist"}), 400
@@ -735,6 +779,10 @@ def plan_route():
     spot = id_to_spot.get(sid)
     if spot is not None:
       ordered_input.append(spot)
+
+  # 若提供用户位置，则将其作为固定起点（贪心/2opt 均保持索引 0 不变）
+  if origin is not None:
+    ordered_input = [origin] + ordered_input
 
   # 获取优化策略参数
   optimize_mode = (data.get("optimize") or "greedy").lower()
@@ -776,6 +824,7 @@ def plan_route():
         "algorithm": algorithm_name,
         "optimize_mode": optimize_mode,
         "amap_used": use_amap,
+        "start_location_used": origin is not None,
       },
     }
   )

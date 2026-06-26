@@ -42,6 +42,18 @@
           <span>美食</span>
           <strong>{{ numberValue(overview.resources?.foods) }}</strong>
         </div>
+        <div class="metric" data-testid="monitor-resource-transportations">
+          <span>交通</span>
+          <strong>{{ numberValue(overview.resources?.transportations) }}</strong>
+        </div>
+        <div class="metric" data-testid="monitor-resource-activities">
+          <span>活动</span>
+          <strong>{{ numberValue(overview.resources?.activities) }}</strong>
+        </div>
+        <div class="metric" data-testid="monitor-resource-specialties">
+          <span>特产</span>
+          <strong>{{ numberValue(overview.resources?.specialties) }}</strong>
+        </div>
         <div class="metric" data-testid="monitor-resource-content">
           <span>标准化内容</span>
           <strong>{{ numberValue(overview.resources?.content_rows) }}</strong>

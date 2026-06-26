@@ -12,6 +12,30 @@ export function getFoods(params) {
   return api.get('/foods', { params });
 }
 
+export function getTransportations(params) {
+  return api.get('/transportations', { params });
+}
+
+export function getActivities(params) {
+  return api.get('/activities', { params });
+}
+
+export function getSpecialties(params) {
+  return api.get('/specialties', { params });
+}
+
+export function getTransportationDetail(id) {
+  return api.get(`/transportations/${id}`);
+}
+
+export function getActivityDetail(id) {
+  return api.get(`/activities/${id}`);
+}
+
+export function getSpecialtyDetail(id) {
+  return api.get(`/specialties/${id}`);
+}
+
 export function createRating(payload) {
   return api.post('/ratings', payload);
 }

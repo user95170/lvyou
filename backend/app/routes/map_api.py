@@ -3,7 +3,16 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import and_
 
-from ..models import ScenicSpot, Hotel, FoodPlace, User, UserProfile
+from ..models import (
+    ScenicSpot,
+    Hotel,
+    FoodPlace,
+    User,
+    UserProfile,
+    Transportation,
+    Activity,
+    Specialty,
+)
 
 map_bp = Blueprint("map", __name__, url_prefix="/api/map")
 
@@ -24,7 +33,7 @@ def _parse_bounds(bounds: dict | None):
 def _query_entities(model, city: str | None, bounds, limit: int):
     q = model.query
     if city:
-        q = q.filter(model.city == city)
+        q = q.filter(model.city.like(f"%{city}%"))
     if bounds is not None and hasattr(model, "longitude") and hasattr(model, "latitude"):
         min_lng, min_lat, max_lng, max_lat = bounds
         q = q.filter(
@@ -49,10 +58,30 @@ def personalized_map():
     user_id = data.get("user_id")
     city = (data.get("city") or "").strip() or None
     bounds = _parse_bounds(data.get("bounds"))
-    categories = data.get("categories") or ["scenic_spot", "food_place", "hotel"]
+    categories = data.get("categories") or [
+        "scenic_spot",
+        "food_place",
+        "hotel",
+        "transportation",
+        "activity",
+        "specialty",
+    ]
     limit_per_type = int(data.get("limit_per_type") or 20)
 
-    result = {"scenic_spot": [], "food_place": [], "hotel": []}
+    result = {
+        "scenic_spot": [],
+        "food_place": [],
+        "hotel": [],
+        "transportation": [],
+        "activity": [],
+        "specialty": [],
+    }
+
+    _SIMPLE_TYPES = {
+        "transportation": Transportation,
+        "activity": Activity,
+        "specialty": Specialty,
+    }
 
     def _parse_list(s):
         if not s:
@@ -181,6 +210,9 @@ def personalized_map():
                 {
                     "id": s.id,
                     "name": s.name,
+                    "city": s.city,
+                    "longitude": float(s.longitude) if s.longitude is not None else None,
+                    "latitude": float(s.latitude) if s.latitude is not None else None,
                     "fit_reasons": _fit_reasons_for_scenic(s),
                 }
                 for s in items
@@ -195,6 +227,9 @@ def personalized_map():
                 {
                     "id": f.id,
                     "name": f.name,
+                    "city": f.city,
+                    "longitude": float(f.longitude) if f.longitude is not None else None,
+                    "latitude": float(f.latitude) if f.latitude is not None else None,
                     "fit_reasons": _fit_reasons_for_food(f),
                 }
                 for f in items
@@ -209,9 +244,25 @@ def personalized_map():
                 {
                     "id": h.id,
                     "name": h.name,
+                    "city": h.city,
+                    "longitude": float(h.longitude) if h.longitude is not None else None,
+                    "latitude": float(h.latitude) if h.latitude is not None else None,
                     "fit_reasons": _fit_reasons_for_hotel(h),
                 }
                 for h in items
+            ]
+        elif cat in _SIMPLE_TYPES:
+            model = _SIMPLE_TYPES[cat]
+            items = _query_entities(model, city, bounds, limit_per_type)
+            result[cat] = [
+                {
+                    "id": obj.id,
+                    "name": obj.name,
+                    "city": obj.city,
+                    "longitude": float(obj.longitude) if obj.longitude is not None else None,
+                    "latitude": float(obj.latitude) if obj.latitude is not None else None,
+                }
+                for obj in items
             ]
 
     return jsonify({"items": result, "meta": {"strategy": "multi_source+profile-demographic", "city": city, "profile_used": bool(profile)}})

@@ -5,6 +5,7 @@
       <nav class="app-nav">
         <router-link to="/" data-testid="nav-home">推荐</router-link>
         <router-link to="/browse" data-testid="nav-browse">目的地浏览</router-link>
+        <router-link to="/map" data-testid="nav-map">电子地图</router-link>
         <router-link to="/route" data-testid="nav-route">行程规划</router-link>
         <router-link to="/trips" data-testid="nav-trips">我的行程</router-link>
         <router-link to="/profile" data-testid="nav-profile">我的偏好</router-link>

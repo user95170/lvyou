@@ -1,11 +1,14 @@
 from flask import Blueprint, jsonify
 
 from ..models import (
+    Activity,
     ContentStandard,
     FoodPlace,
     Hotel,
     Rating,
     ScenicSpot,
+    Specialty,
+    Transportation,
     Trip,
     User,
     UserBehaviorLog,
@@ -31,6 +34,9 @@ def monitor_overview():
             "scenic_spots": _count(ScenicSpot),
             "hotels": _count(Hotel),
             "foods": _count(FoodPlace),
+            "transportations": _count(Transportation),
+            "activities": _count(Activity),
+            "specialties": _count(Specialty),
             "content_rows": _count(ContentStandard),
         },
         "users": {

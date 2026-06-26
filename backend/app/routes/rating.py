@@ -2,7 +2,17 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import func
 
 from ..db import db
-from ..models import Rating, ScenicSpot, Hotel, FoodPlace, User
+from ..models import (
+    Rating,
+    ScenicSpot,
+    Hotel,
+    FoodPlace,
+    User,
+    Transportation,
+    Activity,
+    Specialty,
+)
+from ..services.auth_tokens import enforce_user
 
 rating_bp = Blueprint("rating", __name__, url_prefix="/api/ratings")
 
@@ -10,6 +20,9 @@ TARGET_MODELS = {
     "scenic_spot": ScenicSpot,
     "hotel": Hotel,
     "food_place": FoodPlace,
+    "transportation": Transportation,
+    "activity": Activity,
+    "specialty": Specialty,
 }
 
 
@@ -47,6 +60,10 @@ def create_rating():
 
     if score < 1 or score > 5:
         return jsonify({"error": "score must be between 1 and 5"}), 400
+
+    auth_error = enforce_user(user_id)
+    if auth_error is not None:
+        return auth_error
 
     target_model = TARGET_MODELS.get(target_type)
     if target_model is None:
